@@ -37,6 +37,17 @@ var (
 	fetchReduceTaskChan  = make(chan struct{})
 	returnReduceTaskChan = make(chan reduceTask)
 	updateReduceTaskChan = make(chan []reduceTask)
+
+	// worker 和已完成的 mapTaskId 之间的映射关系
+	workerMapTaskLists = make(map[int][]int)
+	addDoneTaskChan    = make(chan workerMapTaskPair)
+	expireWorkerChan   = make(chan []int)
+	expireTaskChan     = make(chan []int)
+
+	// worker 和其输出的中间键的文件位置
+	workerMidKeyFiles             = make(map[int][]string)
+	addWorkerMidKeyFilesChan      = make(chan workerMidKeyFilePair)
+	expireWorkerAndMidKeyFileChan = make(chan []int)
 )
 
 type worker struct {
@@ -47,6 +58,15 @@ type worker struct {
 type task struct {
 	id, status  int
 	refreshTime time.Time
+}
+
+type workerMapTaskPair struct {
+	wid, tid int
+}
+
+type workerMidKeyFilePair struct {
+	wid   int
+	files []string
 }
 
 func (t task) isZero() bool {
@@ -110,6 +130,9 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	// Your code here.
 	go workersSelect()
 	go mapTaskSelect()
+	go reduceTaskSelect()
+	go workerMapTaskListsSelect()
+	go workerMidKeyFilesSelect()
 
 	c.server()
 	return &c
@@ -170,6 +193,13 @@ func mapTaskSelect() {
 					}
 				}
 			}
+		// 过期导致任务重置
+		case ets := <-expireTaskChan:
+			for _, et := range ets {
+				if v, ok := mapTasks[et]; ok {
+					v.status = NotStarted
+				}
+			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
 		case <-time.Tick(TaskTimeOutTime):
 			now := time.Now()
@@ -219,6 +249,46 @@ func reduceTaskSelect() {
 				if v.status == Started && now.Sub(v.refreshTime).Seconds() > float64(TaskTimeOutTime) {
 					v.status = NotStarted
 				}
+			}
+		}
+	}
+}
+
+// workerMapTaskListsSelect 针对 workerMapTaskListsSelect 的访问和更新代码
+func workerMapTaskListsSelect() {
+	for {
+		select {
+		// 有新任务完成
+		case pair := <-addDoneTaskChan:
+			if v, ok := workerMapTaskLists[pair.wid]; !ok {
+				workerMapTaskLists[pair.wid] = []int{pair.tid}
+			} else {
+				v = append(v, pair.tid)
+			}
+		// 因为 worker 过期导致 mapTask 需要重做
+		case ws := <-expireWorkerChan:
+			ret := make([]int, 0)
+			for _, w := range ws {
+				ret = append(ret, workerMapTaskLists[w]...)
+			}
+			expireTaskChan <- ret
+		}
+	}
+}
+
+// workerMidKeyFilesSelect 针对 workerMidKeyFiles 的访问和更新代码
+func workerMidKeyFilesSelect() {
+	for {
+		select {
+		case pair := <-addWorkerMidKeyFilesChan:
+			if v, ok := workerMidKeyFiles[pair.wid]; !ok {
+				workerMidKeyFiles[pair.wid] = pair.files
+			} else {
+				v = append(v, pair.files...)
+			}
+		case ids := <-expireWorkerAndMidKeyFileChan:
+			for _, id := range ids {
+				delete(workerMidKeyFiles, id)
 			}
 		}
 	}
