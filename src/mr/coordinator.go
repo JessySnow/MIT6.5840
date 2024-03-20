@@ -181,3 +181,45 @@ func mapTaskSelect() {
 		}
 	}
 }
+
+// reduceTaskSelect 针对 reduceTask 的访问和更新代码块
+func reduceTaskSelect() {
+	for {
+		select {
+		// 尝试获取 reduceTasks
+		case <-fetchReduceTaskChan:
+			for _, v := range reduceTasks {
+				if v.status == NotStarted {
+					v.status = Started
+					v.refreshTime = time.Now()
+					returnReduceTaskChan <- v
+					break
+				}
+			}
+			returnReduceTaskChan <- reduceTask{}
+		// 尝试更新 reduceTasks
+		case rts := <-updateReduceTaskChan:
+			for _, rt := range rts {
+				if v, ok := reduceTasks[rt.id]; ok {
+					if rt.status != UnDefined {
+						v.status = rt.status
+					}
+					if !rt.refreshTime.IsZero() {
+						v.refreshTime = rt.refreshTime
+					}
+					if rt.outputFilePath != "" {
+						v.outputFilePath = rt.outputFilePath
+					}
+				}
+			}
+		// 遍历 reduceTasks 将过期的任务重新设置为未开始的状态
+		case <-time.Tick(TaskTimeOutTime):
+			now := time.Now()
+			for _, v := range reduceTasks {
+				if v.status == Started && now.Sub(v.refreshTime).Seconds() > float64(TaskTimeOutTime) {
+					v.status = NotStarted
+				}
+			}
+		}
+	}
+}
