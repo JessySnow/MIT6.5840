@@ -11,7 +11,10 @@ import "net/http"
 
 // 全局常量定义
 const (
-	WORKER_EXPIRE_TIME = 5 * time.Second
+	WorkerExpireTime = 5 * time.Second
+	NotStarted       = 0
+	Started          = 1
+	Done             = 2
 )
 
 // 全局变量定义
@@ -25,6 +28,16 @@ var (
 type worker struct {
 	id           int
 	lastPingTime time.Time
+}
+
+type MapTask struct {
+	inputFilePath string
+	status        int
+}
+
+type ReduceTask struct {
+	outputFilePath string
+	status         int
 }
 
 type Coordinator struct {
@@ -90,10 +103,10 @@ func workersSelect() {
 				v.lastPingTime = time.Now()
 			}
 		// worker 保活超时检查
-		case <-time.Tick(WORKER_EXPIRE_TIME):
+		case <-time.Tick(WorkerExpireTime):
 			ret := make([]int, 0)
 			for k, v := range workers {
-				if time.Now().Sub(v.lastPingTime).Seconds() > float64(WORKER_EXPIRE_TIME) {
+				if time.Now().Sub(v.lastPingTime).Seconds() > float64(WorkerExpireTime) {
 					delete(workers, k)
 					ret = append(ret, k)
 				}
