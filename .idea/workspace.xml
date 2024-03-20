@@ -5,7 +5,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5653d3a5-1fac-43e3-8cd2-3e82f191a1c8" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/mr/coordinator.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/coordinator.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -57,7 +56,7 @@
       <window_info id="Pull Requests" show_stripe_button="false" />
       <window_info id="Learn" show_stripe_button="false" />
       <window_info id="DFA" show_stripe_button="false" />
-      <window_info content_ui="combo" id="Project" order="0" weight="0.17516918" />
+      <window_info content_ui="combo" id="Project" order="0" weight="0.19755337" />
       <window_info id="Commit" order="1" weight="0.25" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" show_stripe_button="false" />
@@ -67,7 +66,7 @@
       <window_info anchor="bottom" id="Version Control" order="0" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.32962245" />
+      <window_info anchor="bottom" id="Terminal" order="3" weight="0.32962245" />
       <window_info anchor="bottom" id="Services" order="4" />
       <window_info anchor="right" id="Endpoints" show_stripe_button="false" />
       <window_info anchor="right" id="make" show_stripe_button="false" side_tool="true" />

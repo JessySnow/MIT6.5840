@@ -22,9 +22,12 @@ const (
 // 全局变量定义
 var (
 	// worker map 和相关的访问 channel
-	workers        = make(map[int]worker)
-	workIdInChan   = make(chan int)
-	workIdsOutChan = make(chan []int)
+	globalWorkerIdCounter int = 0
+	workers                   = make(map[int]worker)
+	workerIdInChan            = make(chan int)
+	workerIdsOutChan          = make(chan []int)
+	workerJoinChan            = make(chan struct{})
+	newWorkerIdChan           = make(chan int)
 
 	// mapTask map 和相关的访问 channel
 	mapTasks          = make(map[int]mapTask)
@@ -87,6 +90,19 @@ type Coordinator struct {
 	// Your definitions here.
 }
 
+// Ping worker 保活接口
+func (c *Coordinator) Ping(wid int, ret *struct{}) error {
+	workerIdInChan <- wid
+	return nil
+}
+
+// Join worker 加入到 coordinator
+func (c *Coordinator) Join(param struct{}, wid *int) error {
+	workerJoinChan <- param
+	*wid = <-newWorkerIdChan
+	return nil
+}
+
 // Your code here -- RPC handlers for the worker to call.
 
 // an example RPC handler.
@@ -127,6 +143,12 @@ func (c *Coordinator) Done() bool {
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
 
+	// 初始化 MapTask
+	for i, f := range files {
+		m := mapTask{task{id: i, status: NotStarted, refreshTime: time.Now()}, f}
+		mapTasks[i] = m
+	}
+
 	// Your code here.
 	go workersSelect()
 	go mapTaskSelect()
@@ -143,12 +165,15 @@ func workersSelect() {
 	for {
 		select {
 		// 新的 worker 加入，或者老的 worker 进行保活
-		case wid := <-workIdInChan:
-			if v, ok := workers[wid]; !ok {
-				workers[wid] = worker{id: wid, lastPingTime: time.Now()}
-			} else {
+		case wid := <-workerIdInChan:
+			if v, ok := workers[wid]; ok {
 				v.lastPingTime = time.Now()
 			}
+		case <-workerJoinChan:
+			wid := globalWorkerIdCounter
+			globalWorkerIdCounter++
+			workers[wid] = worker{id: wid, lastPingTime: time.Now()}
+			newWorkerIdChan <- wid
 		// worker 保活超时检查
 		case <-time.Tick(WorkerExpireTime):
 			ret := make([]int, 0)
@@ -160,7 +185,7 @@ func workersSelect() {
 			}
 			// 发送 worker 失效通知
 			if len(ret) != 0 {
-				workIdsOutChan <- ret
+				workerIdsOutChan <- ret
 			}
 		}
 	}
