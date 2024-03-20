@@ -12,17 +12,31 @@ import "net/http"
 // 全局常量定义
 const (
 	WorkerExpireTime = 5 * time.Second
-	NotStarted       = 0
-	Started          = 1
-	Done             = 2
+	TaskTimeOutTime  = 10 * time.Second
+	UnDefined        = 0
+	NotStarted       = 1
+	Started          = 2
+	Done             = 3
 )
 
 // 全局变量定义
 var (
-	// worker 列表和相关的访问 channel
-	workers         = make(map[int]worker)
-	workIdInChain   = make(chan int)
-	workIdsOutChain = make(chan []int)
+	// worker map 和相关的访问 channel
+	workers        = make(map[int]worker)
+	workIdInChan   = make(chan int)
+	workIdsOutChan = make(chan []int)
+
+	// mapTask map 和相关的访问 channel
+	mapTasks          = make(map[int]mapTask)
+	fetchMapTaskChan  = make(chan struct{})
+	returnMapTaskChan = make(chan mapTask)
+	updateMapTaskChan = make(chan []mapTask)
+
+	// reduceTask map 和相关的访问 channel
+	reduceTasks          = make(map[int]reduceTask)
+	fetchReduceTaskChan  = make(chan struct{})
+	returnReduceTaskChan = make(chan reduceTask)
+	updateReduceTaskChan = make(chan []reduceTask)
 )
 
 type worker struct {
@@ -30,14 +44,23 @@ type worker struct {
 	lastPingTime time.Time
 }
 
-type MapTask struct {
-	inputFilePath string
-	status        int
+type task struct {
+	id, status  int
+	refreshTime time.Time
 }
 
-type ReduceTask struct {
+func (t task) isZero() bool {
+	return t.status == UnDefined
+}
+
+type mapTask struct {
+	task
+	inputFilePath string
+}
+
+type reduceTask struct {
+	task
 	outputFilePath string
-	status         int
 }
 
 type Coordinator struct {
@@ -86,6 +109,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 
 	// Your code here.
 	go workersSelect()
+	go mapTaskSelect()
 
 	c.server()
 	return &c
@@ -96,7 +120,7 @@ func workersSelect() {
 	for {
 		select {
 		// 新的 worker 加入，或者老的 worker 进行保活
-		case wid := <-workIdInChain:
+		case wid := <-workIdInChan:
 			if v, ok := workers[wid]; !ok {
 				workers[wid] = worker{id: wid, lastPingTime: time.Now()}
 			} else {
@@ -113,7 +137,46 @@ func workersSelect() {
 			}
 			// 发送 worker 失效通知
 			if len(ret) != 0 {
-				workIdsOutChain <- ret
+				workIdsOutChan <- ret
+			}
+		}
+	}
+}
+
+// mapTaskSelect 针对 mapTask 的访问和更新代码块
+func mapTaskSelect() {
+	for {
+		select {
+		// 尝试获取 mapTask
+		case <-fetchMapTaskChan:
+			for _, v := range mapTasks {
+				if v.status == NotStarted {
+					v.status = Started
+					v.refreshTime = time.Now()
+					returnMapTaskChan <- v
+					break
+				}
+			}
+			returnMapTaskChan <- mapTask{}
+		// 尝试更新 mapTask
+		case mts := <-updateMapTaskChan:
+			for _, mt := range mts {
+				if v, ok := mapTasks[mt.id]; ok {
+					if mt.status != UnDefined {
+						v.status = mt.status
+					}
+					if !mt.refreshTime.IsZero() {
+						v.refreshTime = mt.refreshTime
+					}
+				}
+			}
+		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
+		case <-time.Tick(TaskTimeOutTime):
+			now := time.Now()
+			for _, v := range mapTasks {
+				if v.status == Started && now.Sub(v.refreshTime).Seconds() > float64(TaskTimeOutTime) {
+					v.status = NotStarted
+				}
 			}
 		}
 	}
