@@ -14,6 +14,7 @@ const (
 	TaskId               TaskParam = 5
 	ReduceTaskKey        TaskParam = 6
 	ReduceTaskInputFiles TaskParam = 7
+	ReduceTaskOutPutFile TaskParam = 8
 )
 
 type TaskParam int
