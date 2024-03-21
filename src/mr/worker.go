@@ -58,11 +58,15 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			continue
 		}
 
-		// 1. 执行任务
+		// 0. 准备任务执行的响应体
 		ret := TaskResp{Type: task.Type}
+		ret.Resp[WorkerId] = wid
+		ret.Resp[TaskId] = task.Param[TaskId]
+
+		// 1. 执行任务
 		switch task.Type {
 		case MapTask:
-			iname := task.Param[InputFilePath].(string)
+			iname := task.Param[MapTaskInputFilePath].(string)
 			nReduce := task.Param[ReduceNum].(int)
 			contents, err := os.ReadFile(iname)
 			if err != nil {
@@ -76,7 +80,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 				continue
 			}
 
-			ret.Resp[OutPutFilePath] = files
+			ret.Resp[MapTaskOutPutFilePath] = files
 		case ReduceTask:
 			iname := task.Param[ReduceTaskInputFiles].([]string)
 			oname := "mr-out-" + strconv.Itoa(task.Param[ReduceTaskKey].(int))

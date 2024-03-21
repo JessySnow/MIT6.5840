@@ -4,17 +4,17 @@ import "os"
 import "strconv"
 
 const (
-	UnDefined            TaskType  = 0
-	MapTask              TaskType  = 1
-	ReduceTask           TaskType  = 2
-	InputFilePath        TaskParam = 1
-	OutPutFilePath       TaskParam = 2
-	ReduceNum            TaskParam = 3
-	WorkerId             TaskParam = 4
-	TaskId               TaskParam = 5
-	ReduceTaskKey        TaskParam = 6
-	ReduceTaskInputFiles TaskParam = 7
-	ReduceTaskOutPutFile TaskParam = 8
+	UnDefined             TaskType  = 0
+	MapTask               TaskType  = 1
+	ReduceTask            TaskType  = 2
+	MapTaskInputFilePath  TaskParam = 1
+	MapTaskOutPutFilePath TaskParam = 2
+	ReduceNum             TaskParam = 3
+	WorkerId              TaskParam = 4
+	TaskId                TaskParam = 5
+	ReduceTaskKey         TaskParam = 6
+	ReduceTaskInputFiles  TaskParam = 7
+	ReduceTaskOutPutFile  TaskParam = 8
 )
 
 type TaskParam int
