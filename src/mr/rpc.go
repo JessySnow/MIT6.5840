@@ -4,17 +4,22 @@ import "os"
 import "strconv"
 
 const (
-	UnDefined     TaskType  = 0
-	MapTask       TaskType  = 1
-	ReduceTask    TaskType  = 2
-	InputFilePath TaskParam = 1
-	ReduceNum     TaskParam = 2
+	UnDefined            TaskType  = 0
+	MapTask              TaskType  = 1
+	ReduceTask           TaskType  = 2
+	InputFilePath        TaskParam = 1
+	OutPutFilePath       TaskParam = 2
+	ReduceNum            TaskParam = 3
+	WorkerId             TaskParam = 4
+	TaskId               TaskParam = 5
+	ReduceTaskKey        TaskParam = 6
+	ReduceTaskInputFiles TaskParam = 7
 )
 
 type TaskParam int
 type TaskType int
 
-type Task struct {
+type TaskReq struct {
 	Type  TaskType
 	Param map[TaskParam]interface{}
 }

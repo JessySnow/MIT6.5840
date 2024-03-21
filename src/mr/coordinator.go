@@ -102,6 +102,14 @@ func (c *Coordinator) Join(param struct{}, wid *int) error {
 	return nil
 }
 
+// FetchTask 获取任务
+func (c *Coordinator) FetchTask(param struct{}, task *TaskReq) error {
+	return nil
+}
+
+func (c *Coordinator) SubmitTask(param TaskResp, ret *struct{}) error {
+}
+
 // Your code here -- RPC handlers for the worker to call.
 
 // start a thread that listens for RPCs from worker.go

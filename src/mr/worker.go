@@ -1,11 +1,16 @@
 package mr
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"sync"
+	"time"
+)
 import "log"
 import "net/rpc"
 import "hash/fnv"
 
-// Map functions return a slice of KeyValue.
+// KeyValue Map functions return a slice of KeyValue.
 type KeyValue struct {
 	Key   string
 	Value string
@@ -19,18 +24,81 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-// main/mrworker.go calls this function.
-func Worker(mapf func(string, string) []KeyValue,
-	reducef func(string, []string) string) {
+func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 
-	// Your worker implementation here.
+	wid, ok := joinCoordinator()
+	if !ok {
+		log.Fatal("Join Coordinator failed!")
+	}
 
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
+	// 保活
+	go func() {
+		for {
+			pingCoordinator(wid)
+			time.Sleep(2 * time.Second)
+		}
+	}()
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	// 开启请求并执行任务
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+
+			// 0. 获取任务
+			task, ok := fetchTask(wid)
+			if !ok || task.Type == UnDefined {
+				continue
+			}
+
+			// 1. 执行任务
+			ret := TaskResp{Type: task.Type}
+			switch task.Type {
+			case MapTask:
+				inputFileName := task.Param[InputFilePath].(string)
+				contents, err := os.ReadFile(inputFileName)
+				if err != nil {
+					continue
+				}
+
+				kvs := mapf(inputFileName, string(contents))
+				files, err := saveKeyValueToFile(kvs)
+				if err != nil {
+					log.Printf("Save midkey to file failed!")
+					continue
+				}
+
+				ret.Resp[OutPutFilePath] = files
+			case ReduceTask:
+				// TODO
+			}
+
+			// 3. 提交任务
+			submitTask(wid, ret)
+		}
+	}()
+
+	wg.Wait()
 }
 
-func FetchTask(task *Task) {
+func joinCoordinator() (id int, ok bool) {
+	ok = call("Coordinator.Join", struct{}{}, &id)
+	return
+}
+
+func fetchTask(wid int) (task TaskReq, ok bool) {
+	ok = call("Coordinator.FetchTask", wid, &task)
+	return
+}
+
+func pingCoordinator(wid int) (ok bool) {
+	ok = call("Coordinator.Ping", wid, struct{}{})
+	return
+}
+
+func submitTask(wid int, tp TaskResp) (ok bool) {
+	return
 }
 
 // send an RPC request to the coordinator, wait for the response.
@@ -52,4 +120,8 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 
 	fmt.Println(err)
 	return false
+}
+
+func saveKeyValueToFile(kvs []KeyValue) (fileNames []string, err error) {
+	return
 }
