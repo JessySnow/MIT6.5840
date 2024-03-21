@@ -11,12 +11,12 @@ import "net/http"
 
 // 全局常量定义
 const (
-	WorkerExpireTime = 5 * time.Second
-	TaskTimeOutTime  = 10 * time.Second
-	UnDefined        = 0
-	NotStarted       = 1
-	Started          = 2
-	Done             = 3
+	workerExpireTime = 5 * time.Second
+	taskTimeOutTime  = 10 * time.Second
+	unDefined        = 0
+	notStarted       = 1
+	started          = 2
+	done             = 3
 )
 
 // 全局变量定义
@@ -72,7 +72,7 @@ type workerMidKeyFilePair struct {
 }
 
 func (t task) isZero() bool {
-	return t.status == UnDefined
+	return t.status == unDefined
 }
 
 type mapTask struct {
@@ -103,14 +103,6 @@ func (c *Coordinator) Join(param struct{}, wid *int) error {
 }
 
 // Your code here -- RPC handlers for the worker to call.
-
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
-	return nil
-}
 
 // start a thread that listens for RPCs from worker.go
 func (c *Coordinator) server() {
@@ -144,7 +136,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 
 	// 初始化 MapTask
 	for i, f := range files {
-		m := mapTask{task{id: i, status: NotStarted, refreshTime: time.Now()}, f}
+		m := mapTask{task{id: i, status: notStarted, refreshTime: time.Now()}, f}
 		mapTasks[i] = m
 	}
 
@@ -175,11 +167,11 @@ func workersHandler() {
 			workers[wid] = worker{id: wid, refreshTime: time.Now()}
 			returnWorkerIdChan <- wid
 		// worker 保活超时检查
-		case <-time.Tick(WorkerExpireTime):
+		case <-time.Tick(workerExpireTime):
 			ret := make([]int, 0)
 			now := time.Now()
 			for k, v := range workers {
-				if now.Sub(v.refreshTime).Seconds() > float64(WorkerExpireTime) {
+				if now.Sub(v.refreshTime).Seconds() > float64(workerExpireTime) {
 					delete(workers, k)
 					ret = append(ret, k)
 				}
@@ -200,8 +192,8 @@ func mapTaskHandler() {
 		// 尝试获取 mapTask
 		case <-fetchMapTaskChan:
 			for _, v := range mapTasks {
-				if v.status == NotStarted {
-					v.status = Started
+				if v.status == notStarted {
+					v.status = started
 					v.refreshTime = time.Now()
 					returnMapTaskChan <- v
 					break
@@ -212,7 +204,7 @@ func mapTaskHandler() {
 		case mts := <-updateMapTaskChan:
 			for _, mt := range mts {
 				if v, ok := mapTasks[mt.id]; ok {
-					if mt.status != UnDefined {
+					if mt.status != unDefined {
 						v.status = mt.status
 					}
 					if !mt.refreshTime.IsZero() {
@@ -224,15 +216,15 @@ func mapTaskHandler() {
 		case ets := <-expireTaskChan:
 			for _, et := range ets {
 				if v, ok := mapTasks[et]; ok {
-					v.status = NotStarted
+					v.status = notStarted
 				}
 			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
-		case <-time.Tick(TaskTimeOutTime):
+		case <-time.Tick(taskTimeOutTime):
 			now := time.Now()
 			for _, v := range mapTasks {
-				if v.status == Started && now.Sub(v.refreshTime).Seconds() > float64(TaskTimeOutTime) {
-					v.status = NotStarted
+				if v.status == started && now.Sub(v.refreshTime).Seconds() > float64(taskTimeOutTime) {
+					v.status = notStarted
 				}
 			}
 		}
@@ -246,8 +238,8 @@ func reduceTaskHandler() {
 		// 尝试获取 reduceTasks
 		case <-fetchReduceTaskChan:
 			for _, v := range reduceTasks {
-				if v.status == NotStarted {
-					v.status = Started
+				if v.status == notStarted {
+					v.status = started
 					v.refreshTime = time.Now()
 					returnReduceTaskChan <- v
 					break
@@ -258,7 +250,7 @@ func reduceTaskHandler() {
 		case rts := <-updateReduceTaskChan:
 			for _, rt := range rts {
 				if v, ok := reduceTasks[rt.id]; ok {
-					if rt.status != UnDefined {
+					if rt.status != unDefined {
 						v.status = rt.status
 					}
 					if !rt.refreshTime.IsZero() {
@@ -270,11 +262,11 @@ func reduceTaskHandler() {
 				}
 			}
 		// 遍历 reduceTasks 将过期的任务重新设置为未开始的状态
-		case <-time.Tick(TaskTimeOutTime):
+		case <-time.Tick(taskTimeOutTime):
 			now := time.Now()
 			for _, v := range reduceTasks {
-				if v.status == Started && now.Sub(v.refreshTime).Seconds() > float64(TaskTimeOutTime) {
-					v.status = NotStarted
+				if v.status == started && now.Sub(v.refreshTime).Seconds() > float64(taskTimeOutTime) {
+					v.status = notStarted
 				}
 			}
 		}
