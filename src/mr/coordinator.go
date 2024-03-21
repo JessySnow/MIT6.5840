@@ -22,12 +22,11 @@ const (
 // 全局变量定义
 var (
 	// worker map 和相关的访问 channel
-	globalWorkerIdCounter int = 0
-	workers                   = make(map[int]worker)
-	workerIdInChan            = make(chan int)
-	workerIdsOutChan          = make(chan []int)
-	workerJoinChan            = make(chan struct{})
-	newWorkerIdChan           = make(chan int)
+	globalWorkerIdCounter = 0
+	workers               = make(map[int]worker)
+	refreshWorkerChan     = make(chan int)
+	fetchWorkerIdChan     = make(chan struct{})
+	returnWorkerIdChan    = make(chan int)
 
 	// mapTask map 和相关的访问 channel
 	mapTasks          = make(map[int]mapTask)
@@ -42,10 +41,10 @@ var (
 	updateReduceTaskChan = make(chan []reduceTask)
 
 	// worker 和已完成的 mapTaskId 之间的映射关系
-	workerMapTaskLists = make(map[int][]int)
-	addDoneTaskChan    = make(chan workerMapTaskPair)
-	expireWorkerChan   = make(chan []int)
-	expireTaskChan     = make(chan []int)
+	workerMapTaskLists      = make(map[int][]int)
+	addDoneTaskChan         = make(chan workerMapTaskPair)
+	expireWorkerAndTaskChan = make(chan []int)
+	expireTaskChan          = make(chan []int)
 
 	// worker 和其输出的中间键的文件位置
 	workerMidKeyFiles             = make(map[int][]string)
@@ -54,8 +53,8 @@ var (
 )
 
 type worker struct {
-	id           int
-	lastPingTime time.Time
+	id          int
+	refreshTime time.Time
 }
 
 type task struct {
@@ -92,14 +91,14 @@ type Coordinator struct {
 
 // Ping worker 保活接口
 func (c *Coordinator) Ping(wid int, ret *struct{}) error {
-	workerIdInChan <- wid
+	refreshWorkerChan <- wid
 	return nil
 }
 
-// Join worker 加入到 coordinator
+// Join worker 加入到 coordinator，返回 worker 的 id
 func (c *Coordinator) Join(param struct{}, wid *int) error {
-	workerJoinChan <- param
-	*wid = <-newWorkerIdChan
+	fetchWorkerIdChan <- param
+	*wid = <-returnWorkerIdChan
 	return nil
 }
 
@@ -150,49 +149,52 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	}
 
 	// Your code here.
-	go workersSelect()
-	go mapTaskSelect()
-	go reduceTaskSelect()
-	go workerMapTaskListsSelect()
-	go workerMidKeyFilesSelect()
+	go workersHandler()
+	go mapTaskHandler()
+	go reduceTaskHandler()
+	go workerMapTaskListsHandler()
+	go workerMidKeyFilesHandler()
 
 	c.server()
 	return &c
 }
 
 // workersSelect 针对 workers 的访问和更新操作代码块
-func workersSelect() {
+func workersHandler() {
 	for {
 		select {
-		// 新的 worker 加入，或者老的 worker 进行保活
-		case wid := <-workerIdInChan:
+		// 老 worker 保活
+		case wid := <-refreshWorkerChan:
 			if v, ok := workers[wid]; ok {
-				v.lastPingTime = time.Now()
+				v.refreshTime = time.Now()
 			}
-		case <-workerJoinChan:
+		// 新 worker 加入
+		case <-fetchWorkerIdChan:
 			wid := globalWorkerIdCounter
 			globalWorkerIdCounter++
-			workers[wid] = worker{id: wid, lastPingTime: time.Now()}
-			newWorkerIdChan <- wid
+			workers[wid] = worker{id: wid, refreshTime: time.Now()}
+			returnWorkerIdChan <- wid
 		// worker 保活超时检查
 		case <-time.Tick(WorkerExpireTime):
 			ret := make([]int, 0)
+			now := time.Now()
 			for k, v := range workers {
-				if time.Now().Sub(v.lastPingTime).Seconds() > float64(WorkerExpireTime) {
+				if now.Sub(v.refreshTime).Seconds() > float64(WorkerExpireTime) {
 					delete(workers, k)
 					ret = append(ret, k)
 				}
 			}
 			// 发送 worker 失效通知
 			if len(ret) != 0 {
-				workerIdsOutChan <- ret
+				expireWorkerAndMidKeyFileChan <- ret
+				expireWorkerAndTaskChan <- ret
 			}
 		}
 	}
 }
 
 // mapTaskSelect 针对 mapTask 的访问和更新代码块
-func mapTaskSelect() {
+func mapTaskHandler() {
 	for {
 		select {
 		// 尝试获取 mapTask
@@ -238,7 +240,7 @@ func mapTaskSelect() {
 }
 
 // reduceTaskSelect 针对 reduceTask 的访问和更新代码块
-func reduceTaskSelect() {
+func reduceTaskHandler() {
 	for {
 		select {
 		// 尝试获取 reduceTasks
@@ -280,7 +282,7 @@ func reduceTaskSelect() {
 }
 
 // workerMapTaskListsSelect 针对 workerMapTaskListsSelect 的访问和更新代码
-func workerMapTaskListsSelect() {
+func workerMapTaskListsHandler() {
 	for {
 		select {
 		// 有新任务完成
@@ -291,7 +293,7 @@ func workerMapTaskListsSelect() {
 				v = append(v, pair.tid)
 			}
 		// 因为 worker 过期导致 mapTask 需要重做
-		case ws := <-expireWorkerChan:
+		case ws := <-expireWorkerAndTaskChan:
 			ret := make([]int, 0)
 			for _, w := range ws {
 				ret = append(ret, workerMapTaskLists[w]...)
@@ -302,7 +304,7 @@ func workerMapTaskListsSelect() {
 }
 
 // workerMidKeyFilesSelect 针对 workerMidKeyFiles 的访问和更新代码
-func workerMidKeyFilesSelect() {
+func workerMidKeyFilesHandler() {
 	for {
 		select {
 		case pair := <-addWorkerMidKeyFilesChan:
