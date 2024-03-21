@@ -3,12 +3,19 @@ package mr
 import (
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 )
 import "log"
 import "net/rpc"
 import "hash/fnv"
+
+type ByKey []KeyValue
+
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // KeyValue Map functions return a slice of KeyValue.
 type KeyValue struct {
@@ -71,7 +78,32 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 
 				ret.Resp[OutPutFilePath] = files
 			case ReduceTask:
-				// TODO
+				inputFileNames := task.Param[ReduceTaskInputFiles].([]string)
+				oname := task.Param[ReduceTaskOutPutFile].(string)
+				ofile, _ := os.Create(oname)
+				intermediate, err := restoreKeyValueFromFiles(inputFileNames)
+				if err != nil {
+					continue
+				}
+				sort.Sort(ByKey(intermediate))
+
+				i := 0
+				for i < len(intermediate) {
+					j := i + 1
+					for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+						j++
+					}
+					values := []string{}
+					for k := i; k < j; k++ {
+						values = append(values, intermediate[k].Value)
+					}
+					output := reducef(intermediate[i].Key, values)
+
+					// this is the correct format for each line of Reduce output.
+					fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+
+					i = j
+				}
 			}
 
 			// 3. 提交任务
@@ -122,6 +154,12 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	return false
 }
 
+// 将 Map 方法所产生的中间键按照 key 的 hash 值存储为不同的文件
 func saveKeyValueToFile(kvs []KeyValue) (fileNames []string, err error) {
+	return
+}
+
+// 从中间键文件中恢复出 KeyValue 切片
+func restoreKeyValueFromFiles(files []string) (kvs []KeyValue, err error) {
 	return
 }
