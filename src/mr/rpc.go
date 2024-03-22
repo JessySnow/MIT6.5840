@@ -3,30 +3,34 @@ package mr
 import "os"
 import "strconv"
 
-const (
-	UnDefined             TaskType  = 0
-	MapTask               TaskType  = 1
-	ReduceTask            TaskType  = 2
-	MapTaskInputFilePath  TaskParam = 1
-	MapTaskOutPutFilePath TaskParam = 2
-	ReduceNum             TaskParam = 3
-	WorkerId              TaskParam = 4
-	TaskId                TaskParam = 5
-	ReduceTaskKey         TaskParam = 6
-	ReduceTaskInputFiles  TaskParam = 7
-)
-
 type TaskParam int
 type TaskType int
 
-type TaskReq struct {
-	Type  TaskType
-	Param map[TaskParam]interface{}
+// 任务类型
+const (
+	UnDefined TaskType = iota
+	MapTask
+	ReduceTask
+)
+
+// 任务参数
+const (
+	TaskId TaskParam = iota
+	WorkerId
+	ReduceNum
+	MapTaskInputFilePath
+	MapTaskOutPutFilePath
+	ReduceTaskKey
+	ReduceTaskInputFiles
+)
+
+type Task struct {
+	Type TaskType
+	Data map[TaskParam]interface{}
 }
 
-type TaskResp struct {
-	Type TaskType
-	Resp map[TaskParam]interface{}
+func (t Task) isZero() bool {
+	return t.Type == UnDefined
 }
 
 // Cook up a unique-ish UNIX-domain socket name

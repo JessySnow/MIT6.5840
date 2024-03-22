@@ -107,15 +107,15 @@ func (c *Coordinator) Join(param struct{}, wid *int) error {
 }
 
 // FetchTask 获取任务
-func (c *Coordinator) FetchTask(param struct{}, task *TaskReq) error {
+func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 	// 0. 获取 Map 任务
 	fetchMapTaskChan <- struct{}{}
 	if mt := <-returnMapTaskChan; !mt.isZero() {
-		task.Param = make(map[TaskParam]interface{})
+		task.Data = make(map[TaskParam]interface{})
 		task.Type = MapTask
-		task.Param[MapTaskInputFilePath] = mt.inputFilePath
-		task.Param[TaskId] = mt.id
-		task.Param[ReduceNum] = _nReduce
+		task.Data[MapTaskInputFilePath] = mt.inputFilePath
+		task.Data[TaskId] = mt.id
+		task.Data[ReduceNum] = _nReduce
 		return nil
 	}
 
@@ -124,8 +124,8 @@ func (c *Coordinator) FetchTask(param struct{}, task *TaskReq) error {
 	if rt := <-returnReduceTaskChan; !rt.isZero() {
 		task.Type = ReduceTask
 		// TODO
-		task.Param[ReduceTaskInputFiles] = nil
-		task.Param[TaskId] = rt.id
+		task.Data[ReduceTaskInputFiles] = nil
+		task.Data[TaskId] = rt.id
 		return nil
 	}
 
@@ -134,10 +134,10 @@ func (c *Coordinator) FetchTask(param struct{}, task *TaskReq) error {
 }
 
 // SubmitTask 提交任务
-func (c *Coordinator) SubmitTask(param TaskResp, ret *struct{}) error {
-	pwid := param.Resp[WorkerId].(int)
-	ptid := param.Resp[TaskId].(int)
-	oname := param.Resp[MapTaskOutPutFilePath].([]string)
+func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
+	pwid := param.Data[WorkerId].(int)
+	ptid := param.Data[TaskId].(int)
+	oname := param.Data[MapTaskOutPutFilePath].([]string)
 
 	switch param.Type {
 	case MapTask:

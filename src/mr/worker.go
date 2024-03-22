@@ -3,118 +3,56 @@ package mr
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"log"
+	"net/rpc"
 	"os"
 	"sort"
 	"strconv"
 	"time"
 )
-import "log"
-import "net/rpc"
-import "hash/fnv"
 
+var pingGap = 2 * time.Second
+var workerId int
+
+type KeyValue struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// ByKey KeyValue 排序接口实现
 type ByKey []KeyValue
 
 func (a ByKey) Len() int           { return len(a) }
 func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
-// KeyValue Map functions return a slice of KeyValue.
-type KeyValue struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-// use ihash(key) % NReduce to choose the reduce
-// task number for each KeyValue emitted by Map.
-func ihash(key string) int {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return int(h.Sum32() & 0x7fffffff)
-}
-
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 
-	wid, ok := joinCoordinator()
+	// 0. 加入调度
+	id, ok := joinCoordinator()
 	if !ok {
 		log.Fatal("Join Coordinator failed!")
 	}
+	workerId = id
+	log.SetPrefix("[Worker#" + strconv.Itoa(workerId) + "]: ")
 
-	// 每 2s Ping 一次 Coordinator 进行保活
+	// 1. Worker 保活
 	go func() {
 		for {
-			if !pingCoordinator(wid) {
-				log.Fatal("Disconnected from coordinator worker exit!")
+			if !pingCoordinator(workerId) {
+				log.Fatal("Disconnected from coordinator, worker exit!")
 			}
-			time.Sleep(2 * time.Second)
+			time.Sleep(pingGap)
 		}
 	}()
 
+	// 2. Worker 执行工作负载
 	for {
-		time.Sleep(5 * time.Second)
-
-		// 0. 获取任务
-		task, ok := fetchTask()
-		if !ok || task.Type == UnDefined {
-			continue
-		}
-
-		// 0. 准备任务执行的响应体
-		tr := TaskResp{Type: task.Type, Resp: make(map[TaskParam]interface{})}
-		tr.Resp[WorkerId] = wid
-		tr.Resp[TaskId] = task.Param[TaskId]
-
-		// 1. 执行任务
-		switch task.Type {
-		case MapTask:
-			iname := task.Param[MapTaskInputFilePath].(string)
-			nReduce := task.Param[ReduceNum].(int)
-			contents, err := os.ReadFile(iname)
-			if err != nil {
-				continue
-			}
-
-			kvs := mapf(iname, string(contents))
-			files, err := saveKeyValueToFile(kvs, nReduce)
-			if err != nil {
-				log.Printf("Save midkey to file failed!")
-				continue
-			}
-
-			tr.Resp[MapTaskOutPutFilePath] = files
-		case ReduceTask:
-			iname := task.Param[ReduceTaskInputFiles].([]string)
-			oname := "mr-out-" + strconv.Itoa(task.Param[ReduceTaskKey].(int))
-			ofile, err := os.Create(oname)
-			if err != nil {
-				continue
-			}
-			intermediate, err := restoreKeyValueFromFiles(iname)
-			if err != nil {
-				continue
-			}
-
-			sort.Sort(ByKey(intermediate))
-			i := 0
-			for i < len(intermediate) {
-				j := i + 1
-				for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
-					j++
-				}
-				values := []string{}
-				for k := i; k < j; k++ {
-					values = append(values, intermediate[k].Value)
-				}
-				output := reducef(intermediate[i].Key, values)
-
-				// this is the correct format for each line of Reduce output.
-				fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
-
-				i = j
-			}
-		}
-
-		// 3. 提交任务
-		submitTask(tr)
+		// 执行工作负载
+		tr := doWorkLoad(mapf, reducef)
+		// 提交任务
+		submitTask(*tr)
 	}
 }
 
@@ -125,7 +63,7 @@ func joinCoordinator() (id int, ok bool) {
 }
 
 // 从调度器获取任务
-func fetchTask() (task TaskReq, ok bool) {
+func fetchTask() (task Task, ok bool) {
 	ok = call("Coordinator.FetchTask", struct{}{}, &task)
 	return
 }
@@ -137,7 +75,7 @@ func pingCoordinator(wid int) (ok bool) {
 }
 
 // 提交完成的任务
-func submitTask(tr TaskResp) (ok bool) {
+func submitTask(tr Task) (ok bool) {
 	ok = call("Coordinator.SubmitTask", tr, &struct{}{})
 	return
 }
@@ -222,4 +160,86 @@ func restoreKeyValueFromFiles(files []string) (kvs []KeyValue, err error) {
 	}
 
 	return
+}
+
+func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []string) string) (t *Task) {
+
+	// 0. 获取任务
+	task, ok := fetchTask()
+	if !ok || task.Type == UnDefined {
+		return nil
+	}
+
+	// 0. 构造任务执行的响应体
+	tr := Task{Type: task.Type, Data: make(map[TaskParam]interface{})}
+	tr.Data[WorkerId] = workerId
+	tr.Data[TaskId] = task.Data[TaskId]
+
+	// 1. 执行任务
+	switch task.Type {
+	case MapTask:
+		iname := task.Data[MapTaskInputFilePath].(string)
+		nReduce := task.Data[ReduceNum].(int)
+		contents, err := os.ReadFile(iname)
+		if err != nil {
+			log.Println("Read input file failed!")
+			return nil
+		}
+
+		kvs := mapf(iname, string(contents))
+		files, err := saveKeyValueToFile(kvs, nReduce)
+		if err != nil {
+			log.Println("Save intermediate to file failed!")
+			return nil
+		}
+
+		tr.Data[MapTaskOutPutFilePath] = files
+	case ReduceTask:
+		inames := task.Data[ReduceTaskInputFiles].([]string)
+		oname := "mr-out-" + strconv.Itoa(task.Data[ReduceTaskKey].(int))
+		ofile, err := os.Create(oname)
+		if err != nil {
+			log.Println("Create reduce output file failed!")
+			return nil
+		}
+
+		intermediate, err := restoreKeyValueFromFiles(inames)
+		if err != nil {
+			log.Println("Restore intermediate from file failed!")
+			return nil
+		}
+
+		sort.Sort(ByKey(intermediate))
+		i := 0
+		for i < len(intermediate) {
+			j := i + 1
+			for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+				j++
+			}
+			var values []string
+			for k := i; k < j; k++ {
+				values = append(values, intermediate[k].Value)
+			}
+			output := reducef(intermediate[i].Key, values)
+
+			// this is the correct format for each line of Reduce output.
+			_, err := fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+			if err != nil {
+				log.Println("Write reduce result to file failed")
+				return nil
+			}
+
+			i = j
+		}
+	}
+
+	return &tr
+}
+
+// use ihash(key) % NReduce to choose the reduce
+// task number for each KeyValue emitted by Map.
+func ihash(key string) int {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return int(h.Sum32() & 0x7fffffff)
 }
