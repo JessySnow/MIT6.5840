@@ -59,9 +59,9 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		}
 
 		// 0. 准备任务执行的响应体
-		ret := TaskResp{Type: task.Type}
-		ret.Resp[WorkerId] = wid
-		ret.Resp[TaskId] = task.Param[TaskId]
+		tr := TaskResp{Type: task.Type}
+		tr.Resp[WorkerId] = wid
+		tr.Resp[TaskId] = task.Param[TaskId]
 
 		// 1. 执行任务
 		switch task.Type {
@@ -80,7 +80,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 				continue
 			}
 
-			ret.Resp[MapTaskOutPutFilePath] = files
+			tr.Resp[MapTaskOutPutFilePath] = files
 		case ReduceTask:
 			iname := task.Param[ReduceTaskInputFiles].([]string)
 			oname := "mr-out-" + strconv.Itoa(task.Param[ReduceTaskKey].(int))
@@ -114,7 +114,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		}
 
 		// 3. 提交任务
-		submitTask(wid, ret)
+		submitTask(tr)
 	}
 }
 
@@ -137,7 +137,8 @@ func pingCoordinator(wid int) (ok bool) {
 }
 
 // 提交完成的任务
-func submitTask(wid int, tp TaskResp) (ok bool) {
+func submitTask(tr TaskResp) (ok bool) {
+	ok = call("Coordinator.SubmitTask", tr, struct{}{})
 	return
 }
 
