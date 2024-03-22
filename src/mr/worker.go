@@ -53,7 +53,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		time.Sleep(5 * time.Second)
 
 		// 0. 获取任务
-		task, ok := fetchTask(wid)
+		task, ok := fetchTask()
 		if !ok || task.Type == UnDefined {
 			continue
 		}
@@ -125,20 +125,20 @@ func joinCoordinator() (id int, ok bool) {
 }
 
 // 从调度器获取任务
-func fetchTask(wid int) (task TaskReq, ok bool) {
-	ok = call("Coordinator.FetchTask", wid, &task)
+func fetchTask() (task TaskReq, ok bool) {
+	ok = call("Coordinator.FetchTask", struct{}{}, &task)
 	return
 }
 
 // Ping 调度器进行保活
 func pingCoordinator(wid int) (ok bool) {
-	ok = call("Coordinator.Ping", wid, struct{}{})
+	ok = call("Coordinator.Ping", wid, &struct{}{})
 	return
 }
 
 // 提交完成的任务
 func submitTask(tr TaskResp) (ok bool) {
-	ok = call("Coordinator.SubmitTask", tr, struct{}{})
+	ok = call("Coordinator.SubmitTask", tr, &struct{}{})
 	return
 }
 
@@ -184,17 +184,17 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (fileNames []string, err er
 		fileName := "intermediate-" + strconv.Itoa(k)
 		f, err := os.Create(fileName)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		bytes, err := json.Marshal(v)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		_, err = f.Write(bytes)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		fileNames = append(fileNames, fileName)
@@ -208,13 +208,13 @@ func restoreKeyValueFromFiles(files []string) (kvs []KeyValue, err error) {
 	for _, f := range files {
 		bytes, err := os.ReadFile(f)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		_kvs := make([]KeyValue, 0)
 		err = json.Unmarshal(bytes, &_kvs)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		kvs = append(kvs, _kvs...)
