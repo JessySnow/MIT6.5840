@@ -5,7 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5653d3a5-1fac-43e3-8cd2-3e82f191a1c8" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-0" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-1" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-2" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-3" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-4" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-5" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-6" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-7" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-8" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/intermediate-9" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/mrworker.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/mrworker.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mr/coordinator.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/coordinator.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/mr/worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/worker.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -31,24 +43,27 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.modules.automatic.dependencies.download&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;go.sdk.automatically.set&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/jessy&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
+    "Go Build.coordinator.executor": "Debug",
+    "Go Build.go build 6.5840/main.executor": "Debug",
+    "Go Build.worker.executor": "Debug",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "RunOnceActivity.go.modules.automatic.dependencies.download": "true",
+    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
+    "git-widget-placeholder": "master",
+    "go.import.settings.migrated": "true",
+    "go.sdk.automatically.set": "true",
+    "last_opened_file_path": "/home/jessy/repo/6.5840/src/main",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm"
   }
-}</component>
+}]]></component>
   <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
     <layout>
       <window_info id="Bookmarks" show_stripe_button="false" side_tool="true" />
@@ -57,19 +72,20 @@
       <window_info id="Pull Requests" show_stripe_button="false" />
       <window_info id="Learn" show_stripe_button="false" />
       <window_info id="DFA" show_stripe_button="false" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.18349817" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.1845393" />
       <window_info id="Commit" order="1" weight="0.25" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" show_stripe_button="false" />
       <window_info anchor="bottom" id="TypeScript" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Debug" weight="0.43804455" />
       <window_info anchor="bottom" id="TODO" show_stripe_button="false" />
       <window_info anchor="bottom" id="File Transfer" show_stripe_button="false" />
       <window_info anchor="bottom" id="Find" weight="0.32962245" />
       <window_info anchor="bottom" id="Version Control" order="0" weight="0.32962245" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" weight="0.32962245" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.32962245" />
-      <window_info anchor="bottom" id="Services" order="4" />
+      <window_info anchor="bottom" id="Terminal" order="3" weight="0.43804455" />
+      <window_info anchor="bottom" id="Services" order="4" weight="0.24830592" />
       <window_info anchor="right" id="Endpoints" show_stripe_button="false" />
       <window_info anchor="right" id="make" show_stripe_button="false" side_tool="true" />
       <window_info anchor="right" id="Notifications" order="0" weight="0.32977617" />
@@ -79,6 +95,37 @@
       <window_info anchor="right" id="Maven" order="4" weight="0.25" />
       <window_info anchor="right" id="Translation.Wordbook" order="5" show_stripe_button="false" side_tool="true" />
     </layout>
+  </component>
+  <component name="RunManager" selected="Go Build.worker">
+    <configuration name="coordinator" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
+      <module name="6.5840" />
+      <working_directory value="$PROJECT_DIR$/src" />
+      <parameters value="pg-being_ernest.txt pg-dorian_gray.txt pg-frankenstein.txt pg-grimm.txt pg-huckleberry_finn.txt pg-metamorphosis.txt pg-sherlock_holmes.txt pg-tom_sawyer.txt" />
+      <kind value="FILE" />
+      <package value="6.5840/main" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/src/main/mrcoordinator.go" />
+      <method v="2" />
+    </configuration>
+    <configuration name="worker" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
+      <module name="6.5840" />
+      <working_directory value="$PROJECT_DIR$/src/main" />
+      <kind value="FILE" />
+      <package value="6.5840/main" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/src/main/mrworker.go" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Go Build.worker" />
+      <item itemvalue="Go Build.coordinator" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Build.worker" />
+        <item itemvalue="Go Build.coordinator" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>

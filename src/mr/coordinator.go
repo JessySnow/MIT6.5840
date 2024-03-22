@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"log"
 	"time"
 )
@@ -50,6 +51,9 @@ var (
 	workerMidKeyFiles             = make(map[int][]string)
 	addWorkerMidKeyFilesChan      = make(chan workerMidKeyFilePair)
 	expireWorkerAndMidKeyFileChan = make(chan []int)
+
+	// reduce 任务的个数
+	_nReduce int
 )
 
 type worker struct {
@@ -107,9 +111,11 @@ func (c *Coordinator) FetchTask(param struct{}, task *TaskReq) error {
 	// 0. 获取 Map 任务
 	fetchMapTaskChan <- struct{}{}
 	if mt := <-returnMapTaskChan; !mt.isZero() {
+		task.Param = make(map[TaskParam]interface{})
 		task.Type = MapTask
 		task.Param[MapTaskInputFilePath] = mt.inputFilePath
 		task.Param[TaskId] = mt.id
+		task.Param[ReduceNum] = _nReduce
 		return nil
 	}
 
@@ -183,9 +189,10 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 
 	// 初始化 MapTask
 	for i, f := range files {
-		m := mapTask{task{id: i, status: notStarted, refreshTime: time.Now()}, f}
+		m := mapTask{task{id: i, status: notStarted}, f}
 		mapTasks[i] = m
 	}
+	_nReduce = nReduce
 
 	// Your code here.
 	go workersHandler()
@@ -238,17 +245,23 @@ func mapTaskHandler() {
 		select {
 		// 获取 mapTask
 		case <-fetchMapTaskChan:
+			fmt.Println("FetchTask")
+			sented := false
 			for _, v := range mapTasks {
 				if v.status == notStarted {
+					sented = true
 					v.status = started
 					v.refreshTime = time.Now()
 					returnMapTaskChan <- v
 					break
 				}
 			}
-			returnMapTaskChan <- mapTask{}
+			if !sented {
+				returnMapTaskChan <- mapTask{}
+			}
 		// 更新 mapTask
 		case mts := <-updateMapTaskChan:
+			fmt.Println("UpdateTask")
 			for _, mt := range mts {
 				if v, ok := mapTasks[mt.id]; ok {
 					if mt.status != unDefined {
@@ -261,6 +274,7 @@ func mapTaskHandler() {
 			}
 		// 过期导致任务重置
 		case ets := <-expireTaskChan:
+			fmt.Println("ExpireTask")
 			for _, et := range ets {
 				if v, ok := mapTasks[et]; ok {
 					v.status = notStarted
@@ -268,6 +282,7 @@ func mapTaskHandler() {
 			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
 		case <-time.Tick(taskTimeOutTime):
+			fmt.Println("ExpireTask")
 			now := time.Now()
 			for _, v := range mapTasks {
 				if v.status == started && now.Sub(v.refreshTime).Seconds() > float64(taskTimeOutTime) {

@@ -59,7 +59,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		}
 
 		// 0. 准备任务执行的响应体
-		tr := TaskResp{Type: task.Type}
+		tr := TaskResp{Type: task.Type, Resp: make(map[TaskParam]interface{})}
 		tr.Resp[WorkerId] = wid
 		tr.Resp[TaskId] = task.Param[TaskId]
 
@@ -175,6 +175,7 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (fileNames []string, err er
 			midKeyValuesMap[midKey] = []KeyValue{v}
 		} else {
 			vs = append(vs, v)
+			midKeyValuesMap[midKey] = vs
 		}
 	}
 
