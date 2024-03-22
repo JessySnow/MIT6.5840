@@ -102,7 +102,7 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 }
 
 // 将 Map 方法所产生的中间键按照 key 的 hash 值存储为不同的文件
-func saveKeyValueToFile(kvs []KeyValue, nReduce int) (fileNames []string, err error) {
+func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error) {
 	midKeyValuesMap := make(map[int][]KeyValue)
 
 	// 根据哈希结果将键分配到不同的桶中
@@ -118,25 +118,22 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (fileNames []string, err er
 	}
 
 	// 将桶中的中间键持久化到文件中，并返回文件的名称
-	fileNames = make([]string, len(midKeyValuesMap))
+	onames = make([]string, len(midKeyValuesMap))
 	for k, v := range midKeyValuesMap {
-		fileName := "intermediate-" + strconv.Itoa(k)
-		f, err := os.Create(fileName)
-		if err != nil {
-			return nil, err
+		fileName := "worker- " + strconv.Itoa(workerId) + "-intermediate-" + strconv.Itoa(k)
+		f, e := os.Create(fileName)
+		if e != nil {
+			return
 		}
 
-		bytes, err := json.Marshal(v)
-		if err != nil {
-			return nil, err
+		bytes, _ := json.Marshal(v)
+
+		_, e = f.Write(bytes)
+		if e != nil {
+			return
 		}
 
-		_, err = f.Write(bytes)
-		if err != nil {
-			return nil, err
-		}
-
-		fileNames = append(fileNames, fileName)
+		onames = append(onames, fileName)
 	}
 
 	return
@@ -162,6 +159,7 @@ func restoreKeyValueFromFiles(files []string) (kvs []KeyValue, err error) {
 	return
 }
 
+// 执行工作负载
 func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []string) string) (t *Task) {
 
 	// 0. 获取任务
