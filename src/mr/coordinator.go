@@ -22,11 +22,11 @@ const (
 // 全局变量定义
 var (
 	// worker map 和相关的访问 channel
-	globalWorkerIdCounter = 0
-	workers               = make(map[int]worker)
-	refreshWorkerChan     = make(chan int)
-	fetchWorkerIdChan     = make(chan struct{})
-	returnWorkerIdChan    = make(chan int)
+	widCounter         = 0
+	workers            = make(map[int]worker)
+	refreshWorkerChan  = make(chan int)
+	fetchWorkerIdChan  = make(chan struct{})
+	returnWorkerIdChan = make(chan int)
 
 	// mapTask map 和相关的访问 channel
 	mapTasks          = make(map[int]mapTask)
@@ -107,7 +107,26 @@ func (c *Coordinator) FetchTask(param struct{}, task *TaskReq) error {
 	return nil
 }
 
+// SubmitTask 提交任务
 func (c *Coordinator) SubmitTask(param TaskResp, ret *struct{}) error {
+	pwid := param.Resp[WorkerId].(int)
+	ptid := param.Resp[TaskId].(int)
+	oname := param.Resp[MapTaskOutPutFilePath].([]string)
+
+	switch param.Type {
+	case MapTask:
+		// 更新任务执行情况
+		updateMapTaskChan <- []mapTask{{task: task{id: pwid, status: done}}}
+		// 更新 worker 和任务执行的对应关系
+		addDoneTaskChan <- workerMapTaskPair{pwid, ptid}
+		// 更新 worker 和 map 任务中间键输出地址的关系
+		addWorkerMidKeyFilesChan <- workerMidKeyFilePair{wid: pwid, files: oname}
+	case ReduceTask:
+		// 更新任务执行情况
+		updateReduceTaskChan <- []reduceTask{{task: task{id: pwid, status: done}}}
+	}
+
+	return nil
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -170,8 +189,8 @@ func workersHandler() {
 			}
 		// 新 worker 加入
 		case <-fetchWorkerIdChan:
-			wid := globalWorkerIdCounter
-			globalWorkerIdCounter++
+			wid := widCounter
+			widCounter++
 			workers[wid] = worker{id: wid, refreshTime: time.Now()}
 			returnWorkerIdChan <- wid
 		// worker 保活超时检查
@@ -197,7 +216,7 @@ func workersHandler() {
 func mapTaskHandler() {
 	for {
 		select {
-		// 尝试获取 mapTask
+		// 获取 mapTask
 		case <-fetchMapTaskChan:
 			for _, v := range mapTasks {
 				if v.status == notStarted {
@@ -208,7 +227,7 @@ func mapTaskHandler() {
 				}
 			}
 			returnMapTaskChan <- mapTask{}
-		// 尝试更新 mapTask
+		// 更新 mapTask
 		case mts := <-updateMapTaskChan:
 			for _, mt := range mts {
 				if v, ok := mapTasks[mt.id]; ok {
