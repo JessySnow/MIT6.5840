@@ -104,6 +104,26 @@ func (c *Coordinator) Join(param struct{}, wid *int) error {
 
 // FetchTask 获取任务
 func (c *Coordinator) FetchTask(param struct{}, task *TaskReq) error {
+	// 0. 获取 Map 任务
+	fetchMapTaskChan <- struct{}{}
+	if mt := <-returnMapTaskChan; !mt.isZero() {
+		task.Type = MapTask
+		task.Param[MapTaskInputFilePath] = mt.inputFilePath
+		task.Param[TaskId] = mt.id
+		return nil
+	}
+
+	// 1. 获取 Reduce 任务
+	fetchReduceTaskChan <- struct{}{}
+	if rt := <-returnReduceTaskChan; !rt.isZero() {
+		task.Type = ReduceTask
+		// TODO
+		task.Param[ReduceTaskInputFiles] = nil
+		task.Param[TaskId] = rt.id
+		return nil
+	}
+
+	// 2. 没有任务可以获取
 	return nil
 }
 
