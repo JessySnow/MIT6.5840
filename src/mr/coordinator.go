@@ -1,7 +1,6 @@
 package mr
 
 import (
-	"fmt"
 	"log"
 	"time"
 )
@@ -20,7 +19,6 @@ const (
 	done             = 3
 )
 
-// 全局变量定义
 var (
 	// worker map 和相关的访问 channel
 	widCounter         = 0
@@ -33,19 +31,19 @@ var (
 	mapTasks          = make(map[int]mapTask)
 	fetchMapTaskChan  = make(chan struct{})
 	returnMapTaskChan = make(chan mapTask)
+	submitMapTaskChan = make(chan mapTaskExecResult)
 	updateMapTaskChan = make(chan []mapTask)
 
 	// reduceTask map 和相关的访问 channel
 	reduceTasks          = make(map[int]reduceTask)
 	fetchReduceTaskChan  = make(chan struct{})
 	returnReduceTaskChan = make(chan reduceTask)
-	updateReduceTaskChan = make(chan []reduceTask)
+	submitReduceTaskChan = make(chan []reduceTask)
 
 	// worker 和已完成的 mapTaskId 之间的映射关系
 	workerMapTaskLists      = make(map[int][]int)
 	addDoneTaskChan         = make(chan workerMapTaskPair)
 	expireWorkerAndTaskChan = make(chan []int)
-	expireTaskChan          = make(chan []int)
 
 	// worker 和其输出的中间键的文件位置
 	workerMidKeyFiles             = make(map[int][]string)
@@ -82,6 +80,11 @@ func (t task) isZero() bool {
 type mapTask struct {
 	task
 	inputFilePath string
+}
+
+type mapTaskExecResult struct {
+	wid, tid        int
+	outputFilePaths []string
 }
 
 type reduceTask struct {
@@ -137,19 +140,16 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
 	pwid := param.Data[WorkerId].(int)
 	ptid := param.Data[TaskId].(int)
-	oname := param.Data[MapTaskOutPutFilePath].([]string)
+	poname := param.Data[MapTaskOutPutFilePath].([]string)
 
 	switch param.Type {
 	case MapTask:
-		// 更新任务执行情况
-		updateMapTaskChan <- []mapTask{{task: task{id: pwid, status: done}}}
-		// 更新 worker 和任务执行的对应关系
-		addDoneTaskChan <- workerMapTaskPair{pwid, ptid}
-		// 更新 worker 和 map 任务中间键输出地址的关系
-		addWorkerMidKeyFilesChan <- workerMidKeyFilePair{wid: pwid, files: oname}
+		submitMapTaskChan <- mapTaskExecResult{wid: pwid, tid: ptid, outputFilePaths: poname}
 	case ReduceTask:
 		// 更新任务执行情况
-		updateReduceTaskChan <- []reduceTask{{task: task{id: pwid, status: done}}}
+		submitReduceTaskChan <- []reduceTask{{task: task{id: pwid, status: done}}}
+	case UnDefined:
+		log.Printf("Skip submit task, %v\n", param)
 	}
 
 	return nil
@@ -171,7 +171,7 @@ func (c *Coordinator) server() {
 	go http.Serve(l, nil)
 }
 
-// main/mrcoordinator.go calls Done() periodically to find out
+// Done main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
 func (c *Coordinator) Done() bool {
 	ret := false
@@ -181,7 +181,7 @@ func (c *Coordinator) Done() bool {
 	return ret
 }
 
-// create a Coordinator.
+// MakeCoordinator create a Coordinator.
 // main/mrcoordinator.go calls this function.
 // nReduce is the number of reduce tasks to use.
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
@@ -245,23 +245,22 @@ func mapTaskHandler() {
 		select {
 		// 获取 mapTask
 		case <-fetchMapTaskChan:
-			fmt.Println("FetchTask")
-			sented := false
-			for _, v := range mapTasks {
+			tag := false
+			for i, v := range mapTasks {
 				if v.status == notStarted {
-					sented = true
+					tag = true
 					v.status = started
 					v.refreshTime = time.Now()
 					returnMapTaskChan <- v
+					mapTasks[i] = v
 					break
 				}
 			}
-			if !sented {
+			if !tag {
 				returnMapTaskChan <- mapTask{}
 			}
 		// 更新 mapTask
 		case mts := <-updateMapTaskChan:
-			fmt.Println("UpdateTask")
 			for _, mt := range mts {
 				if v, ok := mapTasks[mt.id]; ok {
 					if mt.status != unDefined {
@@ -270,23 +269,26 @@ func mapTaskHandler() {
 					if !mt.refreshTime.IsZero() {
 						v.refreshTime = mt.refreshTime
 					}
+					mapTasks[mt.id] = v
 				}
 			}
-		// 过期导致任务重置
-		case ets := <-expireTaskChan:
-			fmt.Println("ExpireTask")
-			for _, et := range ets {
-				if v, ok := mapTasks[et]; ok {
-					v.status = notStarted
-				}
+		// 提交任务
+		case mter := <-submitMapTaskChan:
+			if v, ok := mapTasks[mter.tid]; ok && v.status != done {
+				v.status = done
+				mapTasks[mter.tid] = v
+				// 更新 worker 和任务执行的对应关系
+				addDoneTaskChan <- workerMapTaskPair{mter.wid, mter.tid}
+				// 更新 worker 和 map 任务中间键输出地址的关系
+				addWorkerMidKeyFilesChan <- workerMidKeyFilePair{wid: mter.wid, files: mter.outputFilePaths}
 			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
 		case <-time.Tick(taskTimeOutTime):
-			fmt.Println("ExpireTask")
 			now := time.Now()
-			for _, v := range mapTasks {
+			for k, v := range mapTasks {
 				if v.status == started && now.Sub(v.refreshTime).Seconds() > float64(taskTimeOutTime) {
 					v.status = notStarted
+					mapTasks[k] = v
 				}
 			}
 		}
@@ -309,18 +311,11 @@ func reduceTaskHandler() {
 			}
 			returnReduceTaskChan <- reduceTask{}
 		// 尝试更新 reduceTasks
-		case rts := <-updateReduceTaskChan:
+		case rts := <-submitReduceTaskChan:
 			for _, rt := range rts {
-				if v, ok := reduceTasks[rt.id]; ok {
-					if rt.status != unDefined {
-						v.status = rt.status
-					}
-					if !rt.refreshTime.IsZero() {
-						v.refreshTime = rt.refreshTime
-					}
-					if rt.outputFilePath != "" {
-						v.outputFilePath = rt.outputFilePath
-					}
+				if v, ok := reduceTasks[rt.id]; ok && v.status != done {
+					v.status = done
+					reduceTasks[rt.id] = v
 				}
 			}
 		// 遍历 reduceTasks 将过期的任务重新设置为未开始的状态
@@ -345,14 +340,20 @@ func workerMapTaskListsHandler() {
 				workerMapTaskLists[pair.wid] = []int{pair.tid}
 			} else {
 				v = append(v, pair.tid)
+				workerMapTaskLists[pair.wid] = v
 			}
 		// 因为 worker 过期导致 mapTask 需要重做
 		case ws := <-expireWorkerAndTaskChan:
-			ret := make([]int, 0)
+			ret := make([]mapTask, 0)
 			for _, w := range ws {
-				ret = append(ret, workerMapTaskLists[w]...)
+				if tids, ok := workerMapTaskLists[w]; ok {
+					for _, tid := range tids {
+						ret = append(ret, mapTask{task: task{id: tid, status: notStarted}})
+					}
+					delete(workerMapTaskLists, w)
+				}
 			}
-			expireTaskChan <- ret
+			updateMapTaskChan <- ret
 		}
 	}
 }
