@@ -368,6 +368,7 @@ func workerMidKeyFilesHandler() {
 				workerMidKeyFiles[pair.wid] = pair.files
 			} else {
 				v = append(v, pair.files...)
+				workerMidKeyFiles[pair.wid] = v
 			}
 		case ids := <-expireWorkerAndMidKeyFileChan:
 			for _, id := range ids {
