@@ -119,18 +119,19 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 		task.Data[MapTaskInputFilePath] = mt.inputFilePath
 		task.Data[TaskId] = mt.id
 		task.Data[ReduceNum] = _nReduce
+		log.Printf("MapTask#%d fetched", mt.id)
 		return nil
 	}
 
-	// 1. 获取 Reduce 任务
-	fetchReduceTaskChan <- struct{}{}
-	if rt := <-returnReduceTaskChan; !rt.isZero() {
-		task.Type = ReduceTask
-		// TODO
-		task.Data[ReduceTaskInputFiles] = nil
-		task.Data[TaskId] = rt.id
-		return nil
-	}
+	//// 1. 获取 Reduce 任务
+	//fetchReduceTaskChan <- struct{}{}
+	//if rt := <-returnReduceTaskChan; !rt.isZero() {
+	//	task.Type = ReduceTask
+	//	// TODO
+	//	task.Data[ReduceTaskInputFiles] = nil
+	//	task.Data[TaskId] = rt.id
+	//	return nil
+	//}
 
 	// 2. 没有任务可以获取
 	return nil
@@ -141,6 +142,7 @@ func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
 	pwid := param.Data[WorkerId].(int)
 	ptid := param.Data[TaskId].(int)
 	poname := param.Data[MapTaskOutPutFilePath].([]string)
+	log.Printf("worker#%d submit task#%d", pwid, ptid)
 
 	switch param.Type {
 	case MapTask:
@@ -207,6 +209,8 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 
 // workersSelect 针对 workers 的访问和更新操作代码块
 func workersHandler() {
+	ticker := time.NewTicker(workerExpireTime)
+
 	for {
 		select {
 		// 老 worker 保活
@@ -222,11 +226,11 @@ func workersHandler() {
 			workers[wid] = worker{id: wid, refreshTime: time.Now()}
 			returnWorkerIdChan <- wid
 		// worker 超时检查
-		case <-time.Tick(workerExpireTime):
+		case <-ticker.C:
 			ret := make([]int, 0)
 			now := time.Now()
 			for k, v := range workers {
-				if now.Sub(v.refreshTime).Seconds() > float64(workerExpireTime) {
+				if now.Sub(v.refreshTime).Seconds() > workerExpireTime.Seconds() {
 					delete(workers, k)
 					ret = append(ret, k)
 				}
@@ -242,6 +246,8 @@ func workersHandler() {
 
 // mapTaskSelect 针对 mapTask 的访问和更新代码块
 func mapTaskHandler() {
+	ticker := time.NewTicker(taskTimeOutTime)
+
 	for {
 		select {
 		// 获取 mapTask
@@ -284,10 +290,10 @@ func mapTaskHandler() {
 				addWorkerMidKeyFilesChan <- workerMidKeyFilePair{wid: mter.wid, files: mter.outputFilePaths}
 			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
-		case <-time.Tick(taskTimeOutTime):
+		case <-ticker.C:
 			now := time.Now()
 			for k, v := range mapTasks {
-				if v.status == started && now.Sub(v.refreshTime).Seconds() > float64(taskTimeOutTime) {
+				if v.status == started && now.Sub(v.refreshTime).Seconds() > taskTimeOutTime.Seconds() {
 					v.status = notStarted
 					mapTasks[k] = v
 				}
@@ -298,6 +304,8 @@ func mapTaskHandler() {
 
 // reduceTaskSelect 针对 reduceTask 的访问和更新代码块
 func reduceTaskHandler() {
+	ticker := time.NewTicker(taskTimeOutTime)
+
 	for {
 		select {
 		// 尝试获取 reduceTasks
@@ -320,10 +328,10 @@ func reduceTaskHandler() {
 				}
 			}
 		// 遍历 reduceTasks 将过期的任务重新设置为未开始的状态
-		case <-time.Tick(taskTimeOutTime):
+		case <-ticker.C:
 			now := time.Now()
 			for _, v := range reduceTasks {
-				if v.status == started && now.Sub(v.refreshTime).Seconds() > float64(taskTimeOutTime) {
+				if v.status == started && now.Sub(v.refreshTime).Seconds() > taskTimeOutTime.Seconds() {
 					v.status = notStarted
 				}
 			}

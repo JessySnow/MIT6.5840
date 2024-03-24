@@ -57,6 +57,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			// 输出异常信息
 			log.Printf("%v\n", e)
 		}
+		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -124,7 +125,7 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error
 	// 将桶中的中间键持久化到文件中，并返回文件的名称
 	onames = make([]string, len(midKeyValuesMap))
 	for k, v := range midKeyValuesMap {
-		fileName := "worker- " + strconv.Itoa(workerId) + "-intermediate-" + strconv.Itoa(k)
+		fileName := "worker-" + strconv.Itoa(workerId) + "-" + time.Now().String() + "-intermediate-" + strconv.Itoa(k)
 		f, e := os.Create(fileName)
 		if e != nil {
 			return
