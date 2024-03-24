@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="5653d3a5-1fac-43e3-8cd2-3e82f191a1c8" name="Changes" comment="fix: 修复 Worker 任务提交时未判断任务完成情况的 Bug">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/mr/coordinator.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/coordinator.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

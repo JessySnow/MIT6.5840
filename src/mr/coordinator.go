@@ -213,6 +213,7 @@ func workersHandler() {
 		case wid := <-refreshWorkerChan:
 			if v, ok := workers[wid]; ok {
 				v.refreshTime = time.Now()
+				workers[wid] = v
 			}
 		// 新 worker 加入
 		case <-fetchWorkerIdChan:
@@ -220,7 +221,7 @@ func workersHandler() {
 			widCounter++
 			workers[wid] = worker{id: wid, refreshTime: time.Now()}
 			returnWorkerIdChan <- wid
-		// worker 保活超时检查
+		// worker 超时检查
 		case <-time.Tick(workerExpireTime):
 			ret := make([]int, 0)
 			now := time.Now()
