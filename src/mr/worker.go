@@ -123,6 +123,7 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error
 	}
 
 	// 将桶中的中间键持久化到文件中，并返回文件的名称
+	i := 0
 	onames = make([]string, len(midKeyValuesMap))
 	for k, v := range midKeyValuesMap {
 		fileName := "worker-" + strconv.Itoa(workerId) + "-" + time.Now().String() + "-intermediate-" + strconv.Itoa(k)
@@ -138,7 +139,8 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error
 			return
 		}
 
-		onames = append(onames, fileName)
+		onames[i] = fileName
+		i += 1
 	}
 
 	return

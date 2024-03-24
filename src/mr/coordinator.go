@@ -91,7 +91,6 @@ type mapTaskExecResult struct {
 
 type reduceTask struct {
 	task
-	outputFilePath string
 }
 
 type Coordinator struct {
@@ -128,9 +127,12 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 	// 1. 获取 Reduce 任务
 	fetchReduceTaskChan <- struct{}{}
 	if rt := <-returnReduceTaskChan; !rt.isZero() {
+		task.Data = make(map[TaskParam]interface{})
 		task.Type = ReduceTask
 		task.Data[ReduceTaskInputFiles] = getReduceInputFileNames(rt.id)
 		task.Data[TaskId] = rt.id
+		task.Data[ReduceTaskKey] = rt.id
+		log.Printf("ReduceTask#%d fetched", rt.id)
 		return nil
 	}
 
@@ -142,15 +144,16 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
 	pwid := param.Data[WorkerId].(int)
 	ptid := param.Data[TaskId].(int)
-	poname := param.Data[MapTaskOutPutFilePath].([]string)
-	log.Printf("worker#%d submit task#%d", pwid, ptid)
 
 	switch param.Type {
 	case MapTask:
+		poname := param.Data[MapTaskOutPutFilePath].([]string)
 		submitMapTaskChan <- mapTaskExecResult{wid: pwid, tid: ptid, outputFilePaths: poname}
+		log.Printf("worker#%d submit mapTask#%d", pwid, ptid)
 	case ReduceTask:
-		// 更新任务执行情况
+		// 更新任务map执行情况
 		submitReduceTaskChan <- []reduceTask{{task: task{id: pwid, status: done}}}
+		log.Printf("worker#%d submit reduceTask#%d", pwid, ptid)
 	case UnDefined:
 		log.Printf("Skip submit task, %v\n", param)
 	}
@@ -190,12 +193,16 @@ func (c *Coordinator) Done() bool {
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
 
+	// 初始化 Reduce 任务数量
+	_nReduce = nReduce
 	// 初始化 MapTask
 	for i, f := range files {
-		m := mapTask{task{id: i, status: notStarted}, f}
-		mapTasks[i] = m
+		mapTasks[i] = mapTask{task{id: i, status: notStarted}, f}
 	}
-	_nReduce = nReduce
+	// 初始化 ReduceTask
+	for i := 0; i < _nReduce; i++ {
+		reduceTasks[i] = reduceTask{task{id: i, status: notStarted}}
+	}
 
 	// Your code here.
 	go workersHandler()
@@ -310,16 +317,21 @@ func reduceTaskHandler() {
 		select {
 		// 尝试获取 reduceTasks
 		case <-fetchReduceTaskChan:
-			for _, v := range reduceTasks {
+			tag := false
+			for k, v := range reduceTasks {
 				if v.status == notStarted {
 					v.status = started
 					v.refreshTime = time.Now()
 					returnReduceTaskChan <- v
+					reduceTasks[k] = v
+					tag = true
 					break
 				}
 			}
-			returnReduceTaskChan <- reduceTask{}
-		// 尝试更新 reduceTasks
+			if !tag {
+				returnReduceTaskChan <- reduceTask{}
+			}
+		// 提交 reduceTasks
 		case rts := <-submitReduceTaskChan:
 			for _, rt := range rts {
 				if v, ok := reduceTasks[rt.id]; ok && v.status != done {
@@ -394,8 +406,8 @@ func getReduceInputFileNames(rid int) (ret []string) {
 	defer midKeyFileLock.RUnlock()
 	for _, files := range workerMidKeyFiles {
 		for _, file := range files {
-			i := strings.LastIndex(file, "-")
-			if n, err := strconv.Atoi(file[i:]); err != nil && n == rid {
+			i := strings.LastIndex(file, "-") + 1
+			if n, err := strconv.Atoi(file[i:]); err == nil && n == rid {
 				ret = append(ret, file)
 			}
 		}
