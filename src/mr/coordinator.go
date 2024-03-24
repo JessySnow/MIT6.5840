@@ -2,6 +2,9 @@ package mr
 
 import (
 	"log"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 import "net"
@@ -46,9 +49,8 @@ var (
 	expireWorkerAndTaskChan = make(chan []int)
 
 	// worker 和其输出的中间键的文件位置
-	workerMidKeyFiles             = make(map[int][]string)
-	addWorkerMidKeyFilesChan      = make(chan workerMidKeyFilePair)
-	expireWorkerAndMidKeyFileChan = make(chan []int)
+	workerMidKeyFiles = make(map[int][]string)
+	midKeyFileLock    sync.RWMutex
 
 	// reduce 任务的个数
 	_nReduce int
@@ -123,15 +125,14 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 		return nil
 	}
 
-	//// 1. 获取 Reduce 任务
-	//fetchReduceTaskChan <- struct{}{}
-	//if rt := <-returnReduceTaskChan; !rt.isZero() {
-	//	task.Type = ReduceTask
-	//	// TODO
-	//	task.Data[ReduceTaskInputFiles] = nil
-	//	task.Data[TaskId] = rt.id
-	//	return nil
-	//}
+	// 1. 获取 Reduce 任务
+	fetchReduceTaskChan <- struct{}{}
+	if rt := <-returnReduceTaskChan; !rt.isZero() {
+		task.Type = ReduceTask
+		task.Data[ReduceTaskInputFiles] = getReduceInputFileNames(rt.id)
+		task.Data[TaskId] = rt.id
+		return nil
+	}
 
 	// 2. 没有任务可以获取
 	return nil
@@ -201,7 +202,6 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	go mapTaskHandler()
 	go reduceTaskHandler()
 	go workerMapTaskListsHandler()
-	go workerMidKeyFilesHandler()
 
 	c.server()
 	return &c
@@ -237,7 +237,7 @@ func workersHandler() {
 			}
 			// 发送 worker 失效通知
 			if len(ret) != 0 {
-				expireWorkerAndMidKeyFileChan <- ret
+				expireWorkerAndMidKeyFile(ret)
 				expireWorkerAndTaskChan <- ret
 			}
 		}
@@ -287,7 +287,7 @@ func mapTaskHandler() {
 				// 更新 worker 和任务执行的对应关系
 				addDoneTaskChan <- workerMapTaskPair{mter.wid, mter.tid}
 				// 更新 worker 和 map 任务中间键输出地址的关系
-				addWorkerMidKeyFilesChan <- workerMidKeyFilePair{wid: mter.wid, files: mter.outputFilePaths}
+				addWorkerMidKeyFiles(workerMidKeyFilePair{wid: mter.wid, files: mter.outputFilePaths})
 			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
 		case <-ticker.C:
@@ -367,21 +367,39 @@ func workerMapTaskListsHandler() {
 	}
 }
 
-// workerMidKeyFilesSelect 针对 workerMidKeyFiles 的访问和更新代码
-func workerMidKeyFilesHandler() {
-	for {
-		select {
-		case pair := <-addWorkerMidKeyFilesChan:
-			if v, ok := workerMidKeyFiles[pair.wid]; !ok {
-				workerMidKeyFiles[pair.wid] = pair.files
-			} else {
-				v = append(v, pair.files...)
-				workerMidKeyFiles[pair.wid] = v
-			}
-		case ids := <-expireWorkerAndMidKeyFileChan:
-			for _, id := range ids {
-				delete(workerMidKeyFiles, id)
+// addWorkerMidKeyFiles 新增 worker 和中间键输出文件的映射
+func addWorkerMidKeyFiles(p workerMidKeyFilePair) {
+	midKeyFileLock.Lock()
+	defer midKeyFileLock.Unlock()
+	if v, ok := workerMidKeyFiles[p.wid]; !ok {
+		workerMidKeyFiles[p.wid] = p.files
+	} else {
+		v = append(v, p.files...)
+		workerMidKeyFiles[p.wid] = v
+	}
+}
+
+// expireWorkerAndMidKeyFile 对过期的 worker 进行清理
+func expireWorkerAndMidKeyFile(wids []int) {
+	midKeyFileLock.Lock()
+	defer midKeyFileLock.Unlock()
+	for _, id := range wids {
+		delete(workerMidKeyFiles, id)
+	}
+}
+
+// getReduceInputFileNames 根据 Reduce 任务的编号获取对应的中间键文件名
+func getReduceInputFileNames(rid int) (ret []string) {
+	midKeyFileLock.RLock()
+	defer midKeyFileLock.RUnlock()
+	for _, files := range workerMidKeyFiles {
+		for _, file := range files {
+			i := strings.LastIndex(file, "-")
+			if n, err := strconv.Atoi(file[i:]); err != nil && n == rid {
+				ret = append(ret, file)
 			}
 		}
 	}
+
+	return
 }
