@@ -121,10 +121,10 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error
 	}
 
 	// 将桶中的中间键持久化到文件中，并返回文件的名称
-	i := 0
-	onames = make([]string, len(midKeyValuesMap))
+	pdir, _ := os.Getwd()
+	onames = make([]string, 0)
 	for k, v := range midKeyValuesMap {
-		fileName := "worker-" + strconv.Itoa(workerId) + "-" + time.Now().String() + "-intermediate-" + strconv.Itoa(k)
+		fileName := "/worker-" + strconv.Itoa(workerId) + "-" + time.Now().String() + "-intermediate-" + strconv.Itoa(k)
 		f, e := os.Create(fileName)
 		if e != nil {
 			return
@@ -137,8 +137,7 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error
 			return
 		}
 
-		onames[i] = fileName
-		i += 1
+		onames = append(onames, pdir+fileName)
 	}
 
 	return
@@ -170,7 +169,7 @@ func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []str
 	// 0. 获取任务
 	task, ok := fetchTask()
 	if !ok {
-		return nil, fmt.Errorf("unsupported task type")
+		return nil, fmt.Errorf("fetch task failed")
 	}
 
 	// 0. 构造任务执行的响应
