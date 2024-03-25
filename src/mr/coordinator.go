@@ -16,7 +16,7 @@ import "net/http"
 const (
 	workerExpireTime    = 5 * time.Second
 	taskTimeOutTime     = 10 * time.Second
-	jobDoneCheckGapTime = 10 * time.Second
+	jobDoneCheckGapTime = 1 * time.Second
 	unDefined           = 0
 	notStarted          = 1
 	started             = 2
@@ -32,17 +32,19 @@ var (
 	returnWorkerIdChan = make(chan int)
 
 	// mapTask map 和相关的访问 channel
-	mapTasks          = make(map[int]mapTask)
-	fetchMapTaskChan  = make(chan struct{})
-	returnMapTaskChan = make(chan mapTask)
-	submitMapTaskChan = make(chan mapTaskExecResult)
-	updateMapTaskChan = make(chan []mapTask)
+	mapTasks               = make(map[int]mapTask)
+	fetchMapTaskChan       = make(chan struct{})
+	returnMapTaskChan      = make(chan mapTask)
+	submitMapTaskChan      = make(chan mapTaskExecResult)
+	updateMapTaskChan      = make(chan []mapTask)
+	checkMapTasksStatChan  = make(chan struct{})
+	returnMapTasksStatChan = make(chan bool)
 
 	// reduceTask map 和相关的访问 channel
 	reduceTasks          = make(map[int]reduceTask)
 	fetchReduceTaskChan  = make(chan struct{})
 	returnReduceTaskChan = make(chan reduceTask)
-	submitReduceTaskChan = make(chan []reduceTask)
+	submitReduceTaskChan = make(chan reduceTask)
 
 	// worker 和已完成的 mapTaskId 之间的映射关系
 	workerMapTaskLists      = make(map[int][]int)
@@ -128,6 +130,13 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 		return nil
 	}
 
+	// 检查 MapTask 是否全部已完成
+	checkMapTasksStatChan <- struct{}{}
+	allDone := <-returnMapTasksStatChan
+	if !allDone {
+		return nil
+	}
+
 	// 1. 获取 Reduce 任务
 	fetchReduceTaskChan <- struct{}{}
 	if rt := <-returnReduceTaskChan; !rt.isZero() {
@@ -154,11 +163,9 @@ func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
 		submitMapTaskChan <- mapTaskExecResult{wid: pwid, tid: ptid, outputFilePaths: poname}
 		log.Printf("worker#%d submit mapTask#%d", pwid, ptid)
 	case ReduceTask:
-		// 更新任务map执行情况
-		submitReduceTaskChan <- []reduceTask{{task: task{id: pwid, status: done}}}
+		// 更新任务执行情况
+		submitReduceTaskChan <- reduceTask{task: task{id: pwid, status: done}}
 		log.Printf("worker#%d submit reduceTask#%d", pwid, ptid)
-	case UnDefined:
-		log.Printf("Skip submit task, %v\n", param)
 	}
 
 	return nil
@@ -175,7 +182,7 @@ func (c *Coordinator) server() {
 	os.Remove(sockname)
 	l, e := net.Listen("unix", sockname)
 	if e != nil {
-		log.Fatal("listen error:", e)
+		//log.Fatal("listen error:", e)
 	}
 	go http.Serve(l, nil)
 }
@@ -210,6 +217,16 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	go mapTaskHandler()
 	go reduceTaskHandler()
 	go workerMapTaskListsHandler()
+
+	// 检查 Job 执行状态，完成任务时退出程序
+	go func() {
+		for {
+			if c.Done() {
+				os.Exit(0)
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}()
 
 	c.server()
 	return &c
@@ -258,6 +275,14 @@ func mapTaskHandler() {
 
 	for {
 		select {
+		// 检查 mapTask 是否全部完成
+		case <-checkMapTasksStatChan:
+			for _, v := range mapTasks {
+				if v.status != done {
+					returnMapTasksStatChan <- false
+				}
+			}
+			returnMapTasksStatChan <- true
 		// 获取 mapTask
 		case <-fetchMapTaskChan:
 			tag := false
@@ -322,11 +347,11 @@ func reduceTaskHandler() {
 			tag := false
 			for k, v := range reduceTasks {
 				if v.status == notStarted {
+					tag = true
 					v.status = started
 					v.refreshTime = time.Now()
 					returnReduceTaskChan <- v
 					reduceTasks[k] = v
-					tag = true
 					break
 				}
 			}
@@ -334,12 +359,10 @@ func reduceTaskHandler() {
 				returnReduceTaskChan <- reduceTask{}
 			}
 		// 提交 reduceTasks
-		case rts := <-submitReduceTaskChan:
-			for _, rt := range rts {
-				if v, ok := reduceTasks[rt.id]; ok && v.status != done {
-					v.status = done
-					reduceTasks[rt.id] = v
-				}
+		case rt := <-submitReduceTaskChan:
+			if v, ok := reduceTasks[rt.id]; ok && v.status != done {
+				v.status = done
+				reduceTasks[rt.id] = v
 			}
 		// 遍历 reduceTasks 将过期的任务重新设置为未开始的状态
 		case <-ticker.C:

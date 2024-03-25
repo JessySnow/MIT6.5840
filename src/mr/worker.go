@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var pingGap = 2 * time.Second
+var pingGap = 1 * time.Second
 var workerId int
 
 type KeyValue struct {
@@ -54,7 +54,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			// 提交任务
 			submitTask(*t)
 		} else {
-			log.Printf("%v\n", e)
+			//log.Printf("%v\n", e)
 		}
 	}
 }
@@ -124,7 +124,7 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error
 	pdir, _ := os.Getwd()
 	onames = make([]string, 0)
 	for k, v := range midKeyValuesMap {
-		fileName := "/worker-" + strconv.Itoa(workerId) + "-" + time.Now().String() + "-intermediate-" + strconv.Itoa(k)
+		fileName := pdir + "/worker-" + strconv.Itoa(workerId) + "-" + time.Now().String() + "-intermediate-" + strconv.Itoa(k)
 		f, e := os.Create(fileName)
 		if e != nil {
 			return
@@ -137,7 +137,7 @@ func saveKeyValueToFile(kvs []KeyValue, nReduce int) (onames []string, err error
 			return
 		}
 
-		onames = append(onames, pdir+fileName)
+		onames = append(onames, fileName)
 	}
 
 	return
@@ -168,7 +168,7 @@ func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []str
 
 	// 0. 获取任务
 	task, ok := fetchTask()
-	if !ok {
+	if !ok || task.isZero() {
 		return nil, fmt.Errorf("fetch task failed")
 	}
 
@@ -228,8 +228,6 @@ func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []str
 
 			i = j
 		}
-	default:
-		return nil, fmt.Errorf("undefined task type")
 	}
 
 	return &tr, nil
