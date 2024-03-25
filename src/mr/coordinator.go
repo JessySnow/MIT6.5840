@@ -14,12 +14,13 @@ import "net/http"
 
 // 全局常量定义
 const (
-	workerExpireTime = 5 * time.Second
-	taskTimeOutTime  = 10 * time.Second
-	unDefined        = 0
-	notStarted       = 1
-	started          = 2
-	done             = 3
+	workerExpireTime    = 5 * time.Second
+	taskTimeOutTime     = 10 * time.Second
+	jobDoneCheckGapTime = 10 * time.Second
+	unDefined           = 0
+	notStarted          = 1
+	started             = 2
+	done                = 3
 )
 
 var (
@@ -54,6 +55,9 @@ var (
 
 	// reduce 任务的个数
 	_nReduce int
+	// Coordinator 任务结束标志
+	_doneLock sync.Mutex
+	_done     bool
 )
 
 type worker struct {
@@ -180,11 +184,9 @@ func (c *Coordinator) server() {
 // Done main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
 func (c *Coordinator) Done() bool {
-	ret := false
-
-	// Your code here.
-
-	return ret
+	_doneLock.Lock()
+	defer _doneLock.Unlock()
+	return _done
 }
 
 // MakeCoordinator create a Coordinator.
@@ -312,6 +314,7 @@ func mapTaskHandler() {
 // reduceTaskSelect 针对 reduceTask 的访问和更新代码块
 func reduceTaskHandler() {
 	ticker := time.NewTicker(taskTimeOutTime)
+	doneTicker := time.NewTicker(jobDoneCheckGapTime)
 
 	for {
 		select {
@@ -346,6 +349,19 @@ func reduceTaskHandler() {
 				if v.status == started && now.Sub(v.refreshTime).Seconds() > taskTimeOutTime.Seconds() {
 					v.status = notStarted
 				}
+			}
+		case <-doneTicker.C:
+			tag := true
+			for _, v := range reduceTasks {
+				if v.status != done {
+					tag = false
+					break
+				}
+			}
+			if tag {
+				_doneLock.Lock()
+				_done = true
+				_doneLock.Unlock()
 			}
 		}
 	}

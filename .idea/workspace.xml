@@ -5,89 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5653d3a5-1fac-43e3-8cd2-3e82f191a1c8" name="Changes" comment="fix: 修复 Worker 任务提交时未判断任务完成情况的 Bug">
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.691347 +0800 CST m=+0.033879917-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.694541 +0800 CST m=+0.037073584-intermediate-9" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.696276 +0800 CST m=+0.038809167-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.698494 +0800 CST m=+0.041027459-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.699851 +0800 CST m=+0.042384501-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.70138 +0800 CST m=+0.043912542-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.703403 +0800 CST m=+0.045935834-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.704648 +0800 CST m=+0.047180751-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.707501 +0800 CST m=+0.050033834-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:05.708795 +0800 CST m=+0.051328542-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.742879 +0800 CST m=+2.085406667-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.744755 +0800 CST m=+2.087282834-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.747723 +0800 CST m=+2.090255042-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.749558 +0800 CST m=+2.092084917-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.751021 +0800 CST m=+2.093548667-intermediate-9" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.75294 +0800 CST m=+2.095467167-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.756792 +0800 CST m=+2.099319542-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.759248 +0800 CST m=+2.101775209-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.760504 +0800 CST m=+2.103030959-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:07.761812 +0800 CST m=+2.104339501-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.812033 +0800 CST m=+4.154554667-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.818048 +0800 CST m=+4.160569792-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.820801 +0800 CST m=+4.163322959-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.824838 +0800 CST m=+4.167359126-intermediate-9" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.82759 +0800 CST m=+4.170111376-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.829387 +0800 CST m=+4.171908667-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.831166 +0800 CST m=+4.173687376-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.834619 +0800 CST m=+4.177140626-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.836595 +0800 CST m=+4.179116459-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:09.839027 +0800 CST m=+4.181548584-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.883629 +0800 CST m=+6.226144626-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.885268 +0800 CST m=+6.227784167-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.888188 +0800 CST m=+6.230704334-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.889676 +0800 CST m=+6.232192126-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.891141 +0800 CST m=+6.233657084-intermediate-9" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.893492 +0800 CST m=+6.236008042-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.897254 +0800 CST m=+6.239769626-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.89879 +0800 CST m=+6.241306001-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.901222 +0800 CST m=+6.243738126-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-0-2024-03-24 10:16:11.903562 +0800 CST m=+6.246078001-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.037184 +0800 CST m=+0.008461335-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.037892 +0800 CST m=+0.009168835-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.038695 +0800 CST m=+0.009971918-intermediate-9" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.039235 +0800 CST m=+0.010511585-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.039731 +0800 CST m=+0.011007543-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.040172 +0800 CST m=+0.011448585-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.040523 +0800 CST m=+0.011799876-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.04118 +0800 CST m=+0.012456918-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.042142 +0800 CST m=+0.013418501-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:06.044012 +0800 CST m=+0.015288793-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.088329 +0800 CST m=+2.059600501-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.090453 +0800 CST m=+2.061723960-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.092388 +0800 CST m=+2.063658751-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.096738 +0800 CST m=+2.068009251-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.099857 +0800 CST m=+2.071128626-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.101454 +0800 CST m=+2.072724751-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.105175 +0800 CST m=+2.076446210-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.106715 +0800 CST m=+2.077986585-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.108944 +0800 CST m=+2.080215626-intermediate-9" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:08.111288 +0800 CST m=+2.082559251-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.145975 +0800 CST m=+4.117240418-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.150316 +0800 CST m=+4.121581376-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.151524 +0800 CST m=+4.122789918-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.153682 +0800 CST m=+4.124947751-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.154893 +0800 CST m=+4.126158543-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.156139 +0800 CST m=+4.127404960-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.157673 +0800 CST m=+4.128938376-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.160209 +0800 CST m=+4.131474751-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.161461 +0800 CST m=+4.132726251-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:10.163263 +0800 CST m=+4.134528793-intermediate-9" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.174827 +0800 CST m=+6.146087168-intermediate-0" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.175317 +0800 CST m=+6.146576918-intermediate-6" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.176191 +0800 CST m=+6.147450751-intermediate-5" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.176568 +0800 CST m=+6.147828210-intermediate-4" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.177195 +0800 CST m=+6.148454793-intermediate-2" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.178061 +0800 CST m=+6.149320876-intermediate-1" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.178473 +0800 CST m=+6.149733251-intermediate-7" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.17904 +0800 CST m=+6.150299918-intermediate-8" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.179841 +0800 CST m=+6.151101376-intermediate-3" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/worker-1-2024-03-24 10:16:12.180258 +0800 CST m=+6.151518001-intermediate-9" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/mr/coordinator.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/coordinator.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/mr/worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/worker.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -112,28 +31,28 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_ADD_EXTERNAL_FILES": "true",
-    "Go Build.coordinator.executor": "Debug",
-    "Go Build.go build 6.5840/main.executor": "Debug",
-    "Go Build.worker.executor": "Debug",
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.go.formatter.settings.were.checked": "true",
-    "RunOnceActivity.go.migrated.go.modules.settings": "true",
-    "RunOnceActivity.go.modules.automatic.dependencies.download": "true",
-    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
-    "git-widget-placeholder": "master",
-    "go.import.settings.migrated": "true",
-    "go.sdk.automatically.set": "true",
-    "last_opened_file_path": "/Users/jessy/repo/MIT6.5840",
-    "node.js.detected.package.eslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "reference.settingsdialog.IDE.editor.colors.General"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
+    &quot;Go Build.coordinator.executor&quot;: &quot;Debug&quot;,
+    &quot;Go Build.go build 6.5840/main.executor&quot;: &quot;Debug&quot;,
+    &quot;Go Build.worker.executor&quot;: &quot;Debug&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.automatic.dependencies.download&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
+    &quot;go.sdk.automatically.set&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/jessy/repo/MIT6.5840&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settingsdialog.IDE.editor.colors.General&quot;
   }
-}]]></component>
+}</component>
   <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
     <layout>
       <window_info id="Bookmarks" show_stripe_button="false" side_tool="true" />
@@ -159,7 +78,7 @@
       <window_info anchor="right" id="Endpoints" show_stripe_button="false" />
       <window_info anchor="right" id="make" show_stripe_button="false" side_tool="true" />
       <window_info anchor="right" id="Notifications" order="0" weight="0.32977617" />
-      <window_info anchor="right" id="AIAssistant" order="1" weight="0.25" />
+      <window_info anchor="right" id="AIAssistant" order="1" weight="0.32977617" />
       <window_info anchor="right" id="Database" order="2" weight="0.25" />
       <window_info anchor="right" id="Gradle" order="3" weight="0.25" />
       <window_info anchor="right" id="Maven" order="4" weight="0.25" />
