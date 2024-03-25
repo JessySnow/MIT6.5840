@@ -135,7 +135,6 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 		task.Type = ReduceTask
 		task.Data[ReduceTaskInputFiles] = getReduceInputFileNames(rt.id)
 		task.Data[TaskId] = rt.id
-		task.Data[ReduceTaskKey] = rt.id
 		log.Printf("ReduceTask#%d fetched", rt.id)
 		return nil
 	}

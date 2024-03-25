@@ -20,7 +20,6 @@ const (
 	ReduceNum
 	MapTaskInputFilePath
 	MapTaskOutPutFilePath
-	ReduceTaskKey
 	ReduceTaskInputFiles
 )
 

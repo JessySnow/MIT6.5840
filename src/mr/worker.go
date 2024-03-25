@@ -32,16 +32,16 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 	// 0. 加入调度
 	id, ok := joinCoordinator()
 	if !ok {
-		log.Fatal("Join Coordinator failed!")
+		log.Fatal("join Coordinator failed!")
 	}
 	workerId = id
 	log.SetPrefix("[Worker#" + strconv.Itoa(workerId) + "]: ")
 
-	// 1. Worker 保活
+	// 1. Worker 保活，worker 进程控制
 	go func() {
 		for {
 			if !pingCoordinator(workerId) {
-				log.Fatal("Disconnected from coordinator, worker exit!")
+				log.Fatal("disconnected from coordinator, worker exit!")
 			}
 			time.Sleep(pingGap)
 		}
@@ -54,10 +54,8 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			// 提交任务
 			submitTask(*t)
 		} else {
-			// 输出异常信息
 			log.Printf("%v\n", e)
 		}
-		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -167,15 +165,15 @@ func restoreKeyValueFromFiles(files []string) (kvs []KeyValue, err error) {
 }
 
 // 执行工作负载
-func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []string) string) (t *Task, err error) {
+func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []string) string) (ret *Task, err error) {
 
 	// 0. 获取任务
 	task, ok := fetchTask()
-	if !ok || task.Type == UnDefined {
+	if !ok {
 		return nil, fmt.Errorf("unsupported task type")
 	}
 
-	// 0. 构造任务执行的响应体
+	// 0. 构造任务执行的响应
 	tr := Task{Type: task.Type, Data: make(map[TaskParam]interface{})}
 	tr.Data[WorkerId] = workerId
 	tr.Data[TaskId] = task.Data[TaskId]
@@ -187,31 +185,27 @@ func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []str
 		nReduce := task.Data[ReduceNum].(int)
 		contents, err := os.ReadFile(iname)
 		if err != nil {
-			log.Println("Read input file failed!")
-			return nil, err
+			return nil, fmt.Errorf("read input file %s failed: %v", iname, err)
 		}
 
 		kvs := mapf(iname, string(contents))
 		files, err := saveKeyValueToFile(kvs, nReduce)
 		if err != nil {
-			log.Println("Save intermediate to file failed!")
-			return nil, err
+			return nil, fmt.Errorf("save intermediate to file failed: %v", err)
 		}
 
 		tr.Data[MapTaskOutPutFilePath] = files
 	case ReduceTask:
 		inames := task.Data[ReduceTaskInputFiles].([]string)
-		oname := "mr-out-" + strconv.Itoa(task.Data[ReduceTaskKey].(int))
+		oname := "mr-out-" + strconv.Itoa(task.Data[TaskId].(int))
 		ofile, err := os.Create(oname)
 		if err != nil {
-			log.Println("Create reduce output file failed!")
-			return nil, err
+			return nil, fmt.Errorf("create reduce output file %s failed: %v", oname, err)
 		}
 
 		intermediate, err := restoreKeyValueFromFiles(inames)
 		if err != nil {
-			log.Println("Restore intermediate from file failed!")
-			return nil, err
+			return nil, fmt.Errorf("restore intermediate from files %v, failed: %v", inames, err)
 		}
 
 		sort.Sort(ByKey(intermediate))
@@ -230,12 +224,13 @@ func doWorkLoad(mapf func(string, string) []KeyValue, reducef func(string, []str
 			// this is the correct format for each line of Reduce output.
 			_, err := fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
 			if err != nil {
-				log.Println("Write reduce result to file failed")
-				return nil, err
+				return nil, fmt.Errorf("write reduce result to file %s failed: %v", oname, err)
 			}
 
 			i = j
 		}
+	default:
+		return nil, fmt.Errorf("undefined task type")
 	}
 
 	return &tr, nil
