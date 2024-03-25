@@ -48,5 +48,4 @@ func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(strin
 	reducef := xreducef.(func(string, []string) string)
 
 	return mapf, reducef
-	return Map, Reduce
 }
