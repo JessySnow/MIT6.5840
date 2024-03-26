@@ -155,18 +155,20 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 
 // SubmitTask 提交任务
 func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
-	pwid := param.Data[WorkerId].(int)
-	ptid := param.Data[TaskId].(int)
+	wid := param.Data[WorkerId].(int)
+	tid := param.Data[TaskId].(int)
 
 	switch param.Type {
 	case MapTask:
-		poname := param.Data[MapTaskOutPutFilePath].([]string)
-		submitMapTaskChan <- mapTaskExecResult{wid: pwid, tid: ptid, outputFilePaths: poname}
-		log.Printf("worker#%d submit mapTask#%d", pwid, ptid)
+		oname := param.Data[MapTaskOutPutFilePath].([]string)
+		submitMapTaskChan <- mapTaskExecResult{wid, tid, oname}
+		log.Printf("worker#%d submit mapTask#%d", wid, tid)
 	case ReduceTask:
 		// 更新任务执行情况
-		submitReduceTaskChan <- reduceTask{task: task{id: ptid, status: done}}
-		log.Printf("worker#%d submit reduceTask#%d", pwid, ptid)
+		submitReduceTaskChan <- reduceTask{task{id: tid, status: done}}
+		log.Printf("worker#%d submit reduceTask#%d", wid, tid)
+	default:
+		panic("unhandled default case")
 	}
 
 	return nil
@@ -188,8 +190,6 @@ func (c *Coordinator) server() {
 	go http.Serve(l, nil)
 }
 
-// Done main/mrcoordinator.go calls Done() periodically to find out
-// if the entire job has finished.
 func (c *Coordinator) Done() bool {
 	_doneLock.Lock()
 	defer _doneLock.Unlock()
@@ -218,16 +218,6 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	go mapTaskHandler()
 	go reduceTaskHandler()
 	go workerMapTaskListsHandler()
-
-	// 检查 Job 执行状态，完成任务时退出程序
-	go func() {
-		for {
-			if c.Done() {
-				os.Exit(0)
-			}
-			time.Sleep(2 * time.Second)
-		}
-	}()
 
 	c.server()
 	return &c
@@ -314,14 +304,14 @@ func mapTaskHandler() {
 				}
 			}
 		// 提交任务
-		case mter := <-submitMapTaskChan:
-			if v, ok := mapTasks[mter.tid]; ok && v.status != done {
+		case result := <-submitMapTaskChan:
+			if v, ok := mapTasks[result.tid]; ok && v.status != done {
 				v.status = done
-				mapTasks[mter.tid] = v
+				mapTasks[result.tid] = v
 				// 更新 worker 和任务执行的对应关系
-				addDoneTaskChan <- workerMapTaskPair{mter.wid, mter.tid}
+				addDoneTaskChan <- workerMapTaskPair{result.wid, result.tid}
 				// 更新 worker 和 map 任务中间键输出地址的关系
-				addWorkerMidKeyFiles(workerMidKeyFilePair{wid: mter.wid, files: mter.outputFilePaths})
+				addWorkerMidKeyFiles(workerMidKeyFilePair{result.wid, result.outputFilePaths})
 			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
 		case <-ticker.C:
