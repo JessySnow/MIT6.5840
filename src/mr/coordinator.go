@@ -2,7 +2,6 @@ package mr
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -127,7 +126,7 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 		task.Data[MapTaskInputFilePath] = mt.inputFilePath
 		task.Data[TaskId] = mt.id
 		task.Data[ReduceNum] = _nReduce
-		log.Printf("MapTask#%d fetched", mt.id)
+		//log.Printf("MapTask#%d fetched", mt.id)
 		return nil
 	}
 
@@ -145,7 +144,7 @@ func (c *Coordinator) FetchTask(param struct{}, task *Task) error {
 		task.Type = ReduceTask
 		task.Data[ReduceTaskInputFiles] = getReduceInputFileNames(rt.id)
 		task.Data[TaskId] = rt.id
-		log.Printf("ReduceTask#%d fetched", rt.id)
+		//log.Printf("ReduceTask#%d fetched", rt.id)
 		return nil
 	}
 
@@ -162,11 +161,11 @@ func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
 	case MapTask:
 		oname := param.Data[MapTaskOutPutFilePath].([]string)
 		submitMapTaskChan <- mapTaskExecResult{wid, tid, oname}
-		log.Printf("worker#%d submit mapTask#%d", wid, tid)
+		//log.Printf("worker#%d submit mapTask#%d", wid, tid)
 	case ReduceTask:
 		// 更新任务执行情况
 		submitReduceTaskChan <- reduceTask{task{id: tid, status: done}}
-		log.Printf("worker#%d submit reduceTask#%d", wid, tid)
+		//log.Printf("worker#%d submit reduceTask#%d", wid, tid)
 	default:
 		panic("unhandled default case")
 	}
@@ -268,28 +267,27 @@ func mapTaskHandler() {
 		select {
 		// 检查 mapTask 是否全部完成
 		case <-checkMapTasksStatChan:
+			ret := true
 			for _, v := range mapTasks {
 				if v.status != done {
-					returnMapTasksStatChan <- false
-				}
-			}
-			returnMapTasksStatChan <- true
-		// 获取 mapTask
-		case <-fetchMapTaskChan:
-			tag := false
-			for i, v := range mapTasks {
-				if v.status == notStarted {
-					tag = true
-					v.status = started
-					v.refreshTime = time.Now()
-					returnMapTaskChan <- v
-					mapTasks[i] = v
+					ret = false
 					break
 				}
 			}
-			if !tag {
-				returnMapTaskChan <- mapTask{}
+			returnMapTasksStatChan <- ret
+		// 获取 mapTask
+		case <-fetchMapTaskChan:
+			ret := new(mapTask)
+			for i, v := range mapTasks {
+				if v.status == notStarted {
+					v.status = started
+					v.refreshTime = time.Now()
+					mapTasks[i] = v
+					*ret = v
+					break
+				}
 			}
+			returnMapTaskChan <- *ret
 		// 更新 mapTask
 		case mts := <-updateMapTaskChan:
 			for _, mt := range mts {
@@ -335,20 +333,17 @@ func reduceTaskHandler() {
 		select {
 		// 尝试获取 reduceTasks
 		case <-fetchReduceTaskChan:
-			tag := false
+			ret := new(reduceTask)
 			for k, v := range reduceTasks {
 				if v.status == notStarted {
-					tag = true
 					v.status = started
 					v.refreshTime = time.Now()
 					reduceTasks[k] = v
-					returnReduceTaskChan <- v
+					*ret = v
 					break
 				}
 			}
-			if !tag {
-				returnReduceTaskChan <- reduceTask{}
-			}
+			returnReduceTaskChan <- *ret
 		// 提交 reduceTasks
 		case rt := <-submitReduceTaskChan:
 			if v, ok := reduceTasks[rt.id]; ok && v.status != done {
