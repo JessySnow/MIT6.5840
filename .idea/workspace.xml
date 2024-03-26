@@ -66,15 +66,15 @@
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" show_stripe_button="false" />
       <window_info anchor="bottom" id="TypeScript" show_stripe_button="false" />
-      <window_info active="true" anchor="bottom" id="Debug" visible="true" weight="0.39060986" />
       <window_info anchor="bottom" id="TODO" show_stripe_button="false" />
       <window_info anchor="bottom" id="File Transfer" show_stripe_button="false" />
       <window_info anchor="bottom" id="Find" weight="0.60842204" />
-      <window_info anchor="bottom" id="Version Control" order="0" weight="0.51742494" />
-      <window_info anchor="bottom" id="Problems" order="1" />
-      <window_info anchor="bottom" id="Problems View" order="2" weight="0.43804455" />
-      <window_info anchor="bottom" id="Terminal" order="3" weight="0.55227494" />
-      <window_info anchor="bottom" id="Services" order="4" weight="0.24830592" />
+      <window_info anchor="bottom" id="Debug" order="0" weight="0.36640853" />
+      <window_info anchor="bottom" id="Version Control" order="1" weight="0.51742494" />
+      <window_info anchor="bottom" id="Problems" order="2" />
+      <window_info anchor="bottom" id="Problems View" order="3" weight="0.43804455" />
+      <window_info anchor="bottom" id="Terminal" order="4" weight="0.60842204" />
+      <window_info anchor="bottom" id="Services" order="5" weight="0.24830592" />
       <window_info anchor="right" id="Endpoints" show_stripe_button="false" />
       <window_info anchor="right" id="make" show_stripe_button="false" side_tool="true" />
       <window_info anchor="right" id="Notifications" order="0" weight="0.32977617" />
@@ -111,8 +111,8 @@
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Go Build.worker" />
         <item itemvalue="Go Build.coordinator" />
+        <item itemvalue="Go Build.worker" />
       </list>
     </recent_temporary>
   </component>

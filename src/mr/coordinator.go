@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -164,7 +165,7 @@ func (c *Coordinator) SubmitTask(param Task, ret *struct{}) error {
 		log.Printf("worker#%d submit mapTask#%d", pwid, ptid)
 	case ReduceTask:
 		// 更新任务执行情况
-		submitReduceTaskChan <- reduceTask{task: task{id: pwid, status: done}}
+		submitReduceTaskChan <- reduceTask{task: task{id: ptid, status: done}}
 		log.Printf("worker#%d submit reduceTask#%d", pwid, ptid)
 	}
 
@@ -350,8 +351,8 @@ func reduceTaskHandler() {
 					tag = true
 					v.status = started
 					v.refreshTime = time.Now()
-					returnReduceTaskChan <- v
 					reduceTasks[k] = v
+					returnReduceTaskChan <- v
 					break
 				}
 			}
@@ -367,9 +368,11 @@ func reduceTaskHandler() {
 		// 遍历 reduceTasks 将过期的任务重新设置为未开始的状态
 		case <-ticker.C:
 			now := time.Now()
-			for _, v := range reduceTasks {
+			for k, v := range reduceTasks {
 				if v.status == started && now.Sub(v.refreshTime).Seconds() > taskTimeOutTime.Seconds() {
 					v.status = notStarted
+					reduceTasks[k] = v
+					fmt.Println(v)
 				}
 			}
 		case <-doneTicker.C:
