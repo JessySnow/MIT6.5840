@@ -6,12 +6,19 @@
   <component name="ChangeListManager">
     <list default="true" id="5653d3a5-1fac-43e3-8cd2-3e82f191a1c8" name="Changes" comment="fix: 修复 Worker 任务提交时未判断任务完成情况的 Bug">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/mr/coordinator.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/coordinator.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mr/worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/worker.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Go File" />
+      </list>
+    </option>
   </component>
   <component name="GOROOT" url="file:///usr/lib/go" />
   <component name="Git.Settings">
@@ -37,8 +44,10 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ASKED_ADD_EXTERNAL_FILES": "true",
+    "DefaultGoTemplateProperty": "Go File",
     "Go Build.coordinator.executor": "Debug",
     "Go Build.go build 6.5840/main.executor": "Debug",
+    "Go Build.go build main.go.executor": "Run",
     "Go Build.worker.executor": "Debug",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
@@ -64,7 +73,7 @@
       <window_info id="Pull Requests" show_stripe_button="false" />
       <window_info id="Learn" show_stripe_button="false" />
       <window_info id="DFA" show_stripe_button="false" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.19026549" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.12467465" />
       <window_info id="Commit" order="1" weight="0.19026549" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" show_stripe_button="false" />
@@ -72,13 +81,13 @@
       <window_info anchor="bottom" id="TODO" show_stripe_button="false" />
       <window_info anchor="bottom" id="Messages" weight="0.32962245" />
       <window_info anchor="bottom" id="File Transfer" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Run" show_stripe_button="false" weight="0.60842204" />
+      <window_info active="true" anchor="bottom" id="Run" visible="true" weight="0.32962245" />
       <window_info anchor="bottom" id="Find" weight="0.5667957" />
       <window_info anchor="bottom" id="Debug" order="0" weight="0.57454014" />
       <window_info anchor="bottom" id="Version Control" order="1" weight="0.51742494" />
       <window_info anchor="bottom" id="Problems" order="2" />
       <window_info anchor="bottom" id="Problems View" order="3" weight="0.35672796" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.7061956" />
+      <window_info anchor="bottom" id="Terminal" order="4" weight="0.7061956" />
       <window_info anchor="bottom" id="Services" order="5" weight="0.24830592" />
       <window_info anchor="right" id="Endpoints" show_stripe_button="false" />
       <window_info anchor="right" id="make" show_stripe_button="false" side_tool="true" />
@@ -91,7 +100,7 @@
       <window_info anchor="right" id="Translation.Wordbook" order="5" show_stripe_button="false" side_tool="true" />
     </layout>
   </component>
-  <component name="RunManager" selected="Go Build.worker">
+  <component name="RunManager" selected="Go Build.go build main.go">
     <configuration name="coordinator" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
       <module name="MIT6.5840" />
       <working_directory value="$PROJECT_DIR$/src" />
@@ -100,6 +109,15 @@
       <package value="6.5840/main" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$/src/main/mrcoordinator.go" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build main.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="MIT6.5840" />
+      <working_directory value="$PROJECT_DIR$/src" />
+      <kind value="FILE" />
+      <package value="6.5840/main" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/src/main/main.go" />
       <method v="2" />
     </configuration>
     <configuration name="worker" type="GoApplicationRunConfiguration" factoryName="Go Application" singleton="false" temporary="true">
@@ -112,11 +130,13 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="Go Build.go build main.go" />
       <item itemvalue="Go Build.worker" />
       <item itemvalue="Go Build.coordinator" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Build.go build main.go" />
         <item itemvalue="Go Build.worker" />
         <item itemvalue="Go Build.coordinator" />
       </list>

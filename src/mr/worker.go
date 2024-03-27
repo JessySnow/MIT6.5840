@@ -30,20 +30,15 @@ func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 
 	// 0. 加入调度
-	id, ok := joinCoordinator()
-	if !ok {
-		log.Fatal("join Coordinator failed!")
-	}
-	workerId = id
+	workerId, _ = joinCoordinator()
 	log.SetPrefix("[Worker#" + strconv.Itoa(workerId) + "]: ")
 
 	// 1. Worker 保活，worker 进程控制
 	go func() {
-		for {
+		for range time.Tick(pingGap) {
 			if !pingCoordinator(workerId) {
 				log.Fatal("disconnected from coordinator, worker exit!")
 			}
-			time.Sleep(pingGap)
 		}
 	}()
 
@@ -54,7 +49,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			// 提交任务
 			submitTask(*t)
 		} else {
-			//log.Printf("%v\n", e)
+			log.Println(e)
 		}
 	}
 }
@@ -73,13 +68,13 @@ func fetchTask() (task Task, ok bool) {
 
 // Ping 调度器进行保活
 func pingCoordinator(wid int) (ok bool) {
-	ok = call("Coordinator.Ping", wid, &struct{}{})
+	ok = call("Coordinator.Ping", wid, nil)
 	return
 }
 
 // 提交完成的任务
 func submitTask(tr Task) (ok bool) {
-	ok = call("Coordinator.SubmitTask", tr, &struct{}{})
+	ok = call("Coordinator.SubmitTask", tr, nil)
 	return
 }
 
