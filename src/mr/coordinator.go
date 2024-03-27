@@ -224,7 +224,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 
 // workersSelect 针对 workers 的访问和更新操作代码块
 func workersHandler() {
-	ticker := time.NewTicker(workerExpireTime)
+	ticker := time.Tick(workerExpireTime)
 
 	for {
 		select {
@@ -241,7 +241,7 @@ func workersHandler() {
 			workers[wid] = worker{id: wid, refreshTime: time.Now()}
 			returnWorkerIdChan <- wid
 		// worker 超时检查
-		case <-ticker.C:
+		case <-ticker:
 			ret := make([]int, 0)
 			now := time.Now()
 			for k, v := range workers {
@@ -261,7 +261,7 @@ func workersHandler() {
 
 // mapTaskSelect 针对 mapTask 的访问和更新代码块
 func mapTaskHandler() {
-	ticker := time.NewTicker(taskTimeOutTime)
+	ticker := time.Tick(taskTimeOutTime)
 
 	for {
 		select {
@@ -312,7 +312,7 @@ func mapTaskHandler() {
 				addWorkerMidKeyFiles(workerMidKeyFilePair{result.wid, result.outputFilePaths})
 			}
 		// 遍历 mapTask，将过期的任务重新设置为未开始的状态
-		case <-ticker.C:
+		case <-ticker:
 			now := time.Now()
 			for k, v := range mapTasks {
 				if v.status == started && now.Sub(v.refreshTime).Seconds() > taskTimeOutTime.Seconds() {
@@ -326,8 +326,8 @@ func mapTaskHandler() {
 
 // reduceTaskSelect 针对 reduceTask 的访问和更新代码块
 func reduceTaskHandler() {
-	ticker := time.NewTicker(taskTimeOutTime)
-	doneTicker := time.NewTicker(jobDoneCheckGapTime)
+	ticker := time.Tick(taskTimeOutTime)
+	doneTicker := time.Tick(jobDoneCheckGapTime)
 
 	for {
 		select {
@@ -351,7 +351,7 @@ func reduceTaskHandler() {
 				reduceTasks[rt.id] = v
 			}
 		// 遍历 reduceTasks 将过期的任务重新设置为未开始的状态
-		case <-ticker.C:
+		case <-ticker:
 			now := time.Now()
 			for k, v := range reduceTasks {
 				if v.status == started && now.Sub(v.refreshTime).Seconds() > taskTimeOutTime.Seconds() {
@@ -360,7 +360,7 @@ func reduceTaskHandler() {
 					fmt.Println(v)
 				}
 			}
-		case <-doneTicker.C:
+		case <-doneTicker:
 			tag := true
 			for _, v := range reduceTasks {
 				if v.status != done {
