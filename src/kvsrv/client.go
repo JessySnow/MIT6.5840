@@ -39,8 +39,7 @@ func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 func (ck *Clerk) Get(key string) string {
 	args := GetArgs{key}
 	reply := GetReply{}
-	for ok := ck.server.Call("KVServer.Get", &args, &reply); !ok; {
-	}
+	ck.server.Call("KVServer.Get", &args, &reply)
 	return reply.Value
 }
 
@@ -63,7 +62,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) string {
 		ck.server.Call("KVServer.Put", &args, &reply)
 	case "Append":
 		ck.server.Call("KVServer.Append", &args, &reply)
-		result = args.Value
+		result = reply.Value
 	default:
 		log.Println("PutAppend: Unsupported operation")
 	}
