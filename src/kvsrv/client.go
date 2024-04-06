@@ -1,9 +1,11 @@
 package kvsrv
 
-import "6.5840/labrpc"
+import (
+	"6.5840/labrpc"
+	"log"
+)
 import "crypto/rand"
 import "math/big"
-
 
 type Clerk struct {
 	server *labrpc.ClientEnd
@@ -35,9 +37,11 @@ func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) string {
-
-	// You will have to modify this function.
-	return ""
+	args := GetArgs{key}
+	reply := GetReply{}
+	for ok := ck.server.Call("KVServer.Get", &args, &reply); !ok; {
+	}
+	return reply.Value
 }
 
 // shared by Put and Append.
@@ -49,8 +53,22 @@ func (ck *Clerk) Get(key string) string {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) PutAppend(key string, value string, op string) string {
-	// You will have to modify this function.
-	return ""
+	args := PutAppendArgs{Key: key, Value: value}
+	reply := PutAppendReply{}
+
+	result := ""
+
+	switch op {
+	case "Put":
+		ck.server.Call("KVServer.Put", &args, &reply)
+	case "Append":
+		ck.server.Call("KVServer.Append", &args, &reply)
+		result = args.Value
+	default:
+		log.Println("PutAppend: Unsupported operation")
+	}
+
+	return result
 }
 
 func (ck *Clerk) Put(key string, value string) {
