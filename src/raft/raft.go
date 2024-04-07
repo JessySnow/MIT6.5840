@@ -34,7 +34,8 @@ const (
 	leader
 )
 
-const leaderExpireTime = 1
+const selectionTimeout = 450 * time.Millisecond
+const unVoted = -1
 
 // as each Raft peer becomes aware that successive log entries are
 // committed, the peer should send an ApplyMsg to the service (or
@@ -186,7 +187,9 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
-func (rf *Raft) concurrentSendRequestVotes(currentTerm, serverLength, me int, replyChan chan<- *RequestVoteReply) {
+func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
+	replyChan := make(chan *RequestVoteReply)
+
 	for i := 0; i < serverLength; i++ {
 		if i == me {
 			continue
@@ -195,14 +198,40 @@ func (rf *Raft) concurrentSendRequestVotes(currentTerm, serverLength, me int, re
 		go func(index int) {
 			arg := RequestVoteArgs{Term: currentTerm, CandidateId: me}
 			reply := new(RequestVoteReply)
-			for {
-				ok := rf.sendRequestVote(index, &arg, reply)
-				if ok {
-					break
-				}
+			for !rf.sendRequestVote(index, &arg, reply) {
 			}
+			// TODO 已经关闭的通道会引发 panic
 			replyChan <- reply
 		}(i)
+	}
+
+	// loop until selection timeout
+	// TODO 修改 Raft 结构体的状态前需要进行二次检查，防止被其他的 handler 或者超时机制修改了任期数据
+	voteCount := 1
+	voteTarget := len(rf.peers) / 2
+	for {
+		select {
+		case reply := <-replyChan:
+			if reply.Term > currentTerm {
+				close(replyChan)
+				rf.mu.Lock()
+				rf.currentTerm = reply.Term
+				rf.state = follower
+				rf.selectionTicker = time.Now()
+				rf.mu.Unlock()
+			} else if reply.VoteGranted {
+				voteCount += 1
+				if voteCount > voteTarget {
+					close(replyChan)
+					rf.mu.Lock()
+					if rf.currentTerm == currentTerm {
+						rf.state = leader
+						rf.selectionTicker = time.Now()
+						rf.mu.Unlock()
+						return
+					}
+				}
+			}
 	}
 }
 
@@ -254,18 +283,16 @@ func (rf *Raft) ticker() {
 		// Check if a leader election should be started.
 		now := time.Now()
 
-		// TODO 拉票逻辑待完善
 		rf.mu.Lock()
-		if now.Sub(rf.selectionTicker).Seconds() > leaderExpireTime {
+		if (rf.state != leader) && now.Sub(rf.selectionTicker) > selectionTimeout {
 			rf.currentTerm += 1
 			rf.state = candidate
 			rf.selectionTicker = now
+			rf.votedFor = rf.me
 
-			// TODO 选举计票
-			go func(peerLength, term, candidateId int) {
-				repliesChan := make(chan *RequestVoteReply)
-				rf.concurrentSendRequestVotes(term, peerLength, candidateId, repliesChan)
-			}(rf.currentTerm, rf.me, len(rf.peers))
+			go func(term, peerLength, candidateIndex int) {
+				rf.voteAndCount(term, peerLength, candidateIndex)
+			}(rf.currentTerm, len(rf.peers), rf.me)
 		}
 		rf.mu.Unlock()
 
@@ -293,6 +320,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (3A, 3B, 3C).
+	rf.votedFor = unVoted
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
