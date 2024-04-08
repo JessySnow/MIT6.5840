@@ -201,8 +201,15 @@ func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 		go func(index int) {
 			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
 			reply := new(RequestVoteReply)
+			// 快速退出,判断计票是否已经结束
+			select {
+			case <-stopChan:
+				return
+			default:
+			}
 			for !rf.sendRequestVote(index, arg, reply) {
 			}
+			// 判断计票是否已经结束
 			select {
 			case <-stopChan:
 				return
