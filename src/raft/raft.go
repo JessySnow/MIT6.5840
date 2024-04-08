@@ -187,51 +187,55 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
+// TODO 验证 channel 关闭通知的方案
 func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 	replyChan := make(chan *RequestVoteReply)
+	stopChan := make(chan struct{})
 
+	// 并发的发送拉票请求
 	for i := 0; i < serverLength; i++ {
 		if i == me {
 			continue
 		}
 
 		go func(index int) {
-			arg := RequestVoteArgs{Term: currentTerm, CandidateId: me}
+			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
 			reply := new(RequestVoteReply)
-			for !rf.sendRequestVote(index, &arg, reply) {
+			for !rf.sendRequestVote(index, arg, reply) {
 			}
-			// TODO 已经关闭的通道会引发 panic
-			replyChan <- reply
+			select {
+			case <-stopChan:
+				return
+			default:
+				replyChan <- reply
+			}
 		}(i)
 	}
 
-	// loop until selection timeout
-	// TODO 修改 Raft 结构体的状态前需要进行二次检查，防止被其他的 handler 或者超时机制修改了任期数据
+	// 计票
 	voteCount := 1
 	voteTarget := len(rf.peers) / 2
-	for {
-		select {
-		case reply := <-replyChan:
-			if reply.Term > currentTerm {
-				close(replyChan)
+	for reply := range replyChan {
+		if reply.Term > currentTerm {
+			rf.mu.Lock()
+			rf.currentTerm = reply.Term
+			rf.state = follower
+			rf.selectionTicker = time.Now()
+			rf.mu.Unlock()
+			close(stopChan)
+			return
+		} else if reply.Term == currentTerm && reply.VoteGranted {
+			voteCount += 1
+			if voteCount > voteTarget {
 				rf.mu.Lock()
-				rf.currentTerm = reply.Term
-				rf.state = follower
-				rf.selectionTicker = time.Now()
-				rf.mu.Unlock()
-			} else if reply.VoteGranted {
-				voteCount += 1
-				if voteCount > voteTarget {
-					close(replyChan)
-					rf.mu.Lock()
-					if rf.currentTerm == currentTerm {
-						rf.state = leader
-						rf.selectionTicker = time.Now()
-						rf.mu.Unlock()
-						return
-					}
+				if rf.currentTerm == currentTerm {
+					rf.state = leader
 				}
+				rf.mu.Unlock()
+				close(stopChan)
+				return
 			}
+		}
 	}
 }
 
@@ -276,23 +280,20 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
+// ticker 选举计时器，负责检查选举超时状态，并触发选举行为
 func (rf *Raft) ticker() {
 	for rf.killed() == false {
 
 		// Your code here (3A)
 		// Check if a leader election should be started.
 		now := time.Now()
-
 		rf.mu.Lock()
 		if (rf.state != leader) && now.Sub(rf.selectionTicker) > selectionTimeout {
 			rf.currentTerm += 1
 			rf.state = candidate
 			rf.selectionTicker = now
 			rf.votedFor = rf.me
-
-			go func(term, peerLength, candidateIndex int) {
-				rf.voteAndCount(term, peerLength, candidateIndex)
-			}(rf.currentTerm, len(rf.peers), rf.me)
+			go rf.voteAndCount(rf.currentTerm, len(rf.peers), rf.me)
 		}
 		rf.mu.Unlock()
 
