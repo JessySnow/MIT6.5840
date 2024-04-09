@@ -153,6 +153,27 @@ type RequestVoteReply struct {
 // example RequestVote RPC handler.
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (3A, 3B).
+	rf.mu.Lock()
+	if rf.currentTerm > args.Term {
+		// 拒绝任期小于自己的服务器的拉票请求
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+	} else if rf.currentTerm < args.Term {
+		// 服务器任期过期，重置服务器状态
+		rf.currentTerm = args.Term
+		rf.state = follower
+		rf.votedFor = args.CandidateId
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = true
+	} else if rf.state != leader && (rf.votedFor == unVoted || rf.votedFor == args.CandidateId) {
+		// 任期相同且服务器不是 leader，如果未进行投票或者投给的拉票的服务器，则同意头拉票请求，且将自己转变为候选人
+		rf.state = candidate
+		rf.selectionTicker = time.Now()
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = true
+	}
+
+	defer rf.mu.Unlock()
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -187,7 +208,6 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
-// TODO 验证 channel 关闭通知的方案
 func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 	replyChan := make(chan *RequestVoteReply)
 	stopChan := make(chan struct{})
