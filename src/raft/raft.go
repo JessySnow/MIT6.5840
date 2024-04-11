@@ -212,7 +212,7 @@ func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 	replyChan := make(chan *RequestVoteReply)
 	stopChan := make(chan struct{})
 
-	// 并发的发送拉票请求
+	// 并发拉票
 	for i := 0; i < serverLength; i++ {
 		if i == me {
 			continue
@@ -229,7 +229,7 @@ func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 			}
 			for !rf.sendRequestVote(index, arg, reply) {
 			}
-			// 判断计票是否已经结束
+			// 判断计票是否已经结束，未结束将发送拉票结果
 			select {
 			case <-stopChan:
 				return
