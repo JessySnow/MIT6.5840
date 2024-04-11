@@ -245,9 +245,12 @@ func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 	for reply := range replyChan {
 		if reply.Term > currentTerm {
 			rf.mu.Lock()
-			rf.currentTerm = reply.Term
-			rf.state = follower
-			rf.selectionTicker = time.Now()
+			// 双重检查，防止被其他的协程修改了状态
+			if rf.currentTerm < reply.Term {
+				rf.currentTerm = reply.Term
+				rf.state = follower
+				rf.selectionTicker = time.Now()
+			}
 			rf.mu.Unlock()
 			close(stopChan)
 			return
