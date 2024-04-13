@@ -34,6 +34,7 @@ const (
 	leader
 )
 
+const heartbeatInterval = 100 * time.Millisecond
 const selectionTimeout = 450 * time.Millisecond
 const unVoted = -1
 
@@ -150,6 +151,15 @@ type RequestVoteReply struct {
 	VoteGranted bool
 }
 
+type AppendEntriesArgs struct {
+	Term, LeaderId int
+}
+
+type AppendEntriesReply struct {
+	Term    int
+	Success bool
+}
+
 // example RequestVote RPC handler.
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (3A, 3B).
@@ -174,6 +184,22 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 
 	defer rf.mu.Unlock()
+}
+
+// AppendEntries 接受 leader 的日志和心跳
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if args.Term < rf.currentTerm {
+		reply.Success = false
+		reply.Term = rf.currentTerm
+	} else if args.Term > rf.currentTerm {
+		rf.currentTerm = args.Term
+	} else {
+		reply.Term = args.Term
+		reply.Success = true
+	}
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -206,6 +232,32 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
+}
+
+// sendAppendEntries 发送日志复制，心跳
+func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
+	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
+	return ok
+}
+
+// sendAppendEntriesToAllServers leader 循环地并发发送请求到所有的接受者
+func (rf *Raft) sendAppendEntriesToAllServers() {
+	rf.mu.Lock()
+	term := rf.currentTerm
+	defer rf.mu.Unlock()
+
+	for i := 0; i < len(rf.peers); i++ {
+		if i == rf.me {
+			continue
+		}
+
+		go func() {
+			for {
+				rf.sendAppendEntries(rf.me, &AppendEntriesArgs{term, rf.me}, &AppendEntriesReply{})
+				time.Sleep(heartbeatInterval)
+			}
+		}()
+	}
 }
 
 func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
@@ -246,7 +298,7 @@ func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 		if reply.Term > currentTerm {
 			rf.mu.Lock()
 			// 双重检查，防止被其他的协程修改了状态
-			if rf.currentTerm < reply.Term {
+			if reply.Term > rf.currentTerm {
 				rf.currentTerm = reply.Term
 				rf.state = follower
 				rf.selectionTicker = time.Now()
@@ -260,6 +312,7 @@ func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 				rf.mu.Lock()
 				if rf.currentTerm == currentTerm {
 					rf.state = leader
+					// 成为 leader 后立即发送心跳
 				}
 				rf.mu.Unlock()
 				close(stopChan)
