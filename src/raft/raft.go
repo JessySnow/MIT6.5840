@@ -72,6 +72,12 @@ type Raft struct {
 	// state a Raft server must maintain.
 	currentTerm, votedFor, state int
 	selectionTicker              time.Time
+
+	log                      []LogEntry
+	commitIndex, lastApplied int
+
+	nextIndex  []int
+	matchIndex []int
 }
 
 // return currentTerm and whether this server
@@ -151,8 +157,14 @@ type RequestVoteReply struct {
 	VoteGranted bool
 }
 
+type LogEntry struct {
+	Command     interface{}
+	Index, Term int
+}
+
 type AppendEntriesArgs struct {
-	Term, LeaderId int
+	Term, LeaderId, PrevLogIndex, PrevLogTerm, LeaderCommit int
+	Entries                                                 []LogEntry
 }
 
 type AppendEntriesReply struct {
