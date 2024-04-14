@@ -164,6 +164,8 @@ type AppendEntriesReply struct {
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (3A, 3B).
 	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
 	if rf.currentTerm > args.Term {
 		// 拒绝任期小于自己的服务器的拉票请求
 		reply.Term = rf.currentTerm
@@ -185,8 +187,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 	}
-
-	defer rf.mu.Unlock()
 }
 
 // AppendEntries 接受 leader 的日志和心跳
