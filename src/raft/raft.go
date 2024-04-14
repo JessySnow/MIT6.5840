@@ -171,7 +171,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	} else if rf.currentTerm < args.Term {
 		// 服务器任期过期，重置服务器状态
 		rf.currentTerm = args.Term
-		rf.state = follower
+		rf.state = candidate
 		rf.votedFor = args.CandidateId
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = true
@@ -181,6 +181,9 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.selectionTicker = time.Now()
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = true
+	} else {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
 	}
 
 	defer rf.mu.Unlock()
