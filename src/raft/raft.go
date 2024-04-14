@@ -245,8 +245,8 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	return ok
 }
 
-// sendAppendEntriesToAllServers leader 循环地并发发送请求到所有的接受者
-func (rf *Raft) sendAppendEntriesToAllServers() {
+// startHeartBeat leader 循环地并发发送请求到所有的接受者
+func (rf *Raft) startHeartBeat() {
 	rf.mu.Lock()
 	term := rf.currentTerm
 	defer rf.mu.Unlock()
@@ -306,6 +306,7 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 		if reply.Term > currentTerm {
 			rf.mu.Lock()
 			// 双重检查，防止被其他的协程修改了状态
+			// term 过期切换到下一个任期，并修改状态为 follower
 			if reply.Term > rf.currentTerm {
 				rf.currentTerm = reply.Term
 				rf.state = follower
@@ -318,9 +319,10 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 			voteCount += 1
 			if voteCount > voteTarget {
 				rf.mu.Lock()
-				if rf.currentTerm == currentTerm {
+				if reply.Term == rf.currentTerm {
 					rf.state = leader
 					// 成为 leader 后立即发送心跳
+					go rf.startHeartBeat()
 				}
 				rf.mu.Unlock()
 				close(stopChan)
