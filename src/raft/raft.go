@@ -195,8 +195,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = false
 		reply.Term = rf.currentTerm
 	} else if args.Term > rf.currentTerm {
+		rf.state = follower
 		rf.currentTerm = args.Term
+		rf.selectionTicker = time.Now()
+		reply.Term = args.Term
+		reply.Success = true
 	} else {
+		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
 		reply.Success = true
 	}
