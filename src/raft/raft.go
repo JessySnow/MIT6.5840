@@ -35,7 +35,7 @@ const (
 )
 
 const heartbeatInterval = 100 * time.Millisecond
-const selectionTimeout = 450 * time.Millisecond
+const selectionTimeout = 350 * time.Millisecond
 const unVoted = -1
 
 // as each Raft peer becomes aware that successive log entries are
@@ -265,7 +265,7 @@ func (rf *Raft) sendAppendEntriesToAllServers() {
 	}
 }
 
-func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
+func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 	replyChan := make(chan *RequestVoteReply)
 	stopChan := make(chan struct{})
 
@@ -276,17 +276,20 @@ func (rf *Raft) voteAndCount(currentTerm, serverLength, me int) {
 		}
 
 		go func(index int) {
-			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
-			reply := new(RequestVoteReply)
-			// 快速退出,判断计票是否已经结束
+			// 0. 判断计票是否已经结束,快速退出
 			select {
 			case <-stopChan:
 				return
 			default:
 			}
+
+			// 1. 发起 RPC 请求
+			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
+			reply := new(RequestVoteReply)
 			for !rf.sendRequestVote(index, arg, reply) {
 			}
-			// 判断计票是否已经结束，未结束将发送拉票结果
+
+			// 2. 判断计票是否已经结束，未结束将发送结果到计票逻辑中
 			select {
 			case <-stopChan:
 				return
@@ -379,9 +382,8 @@ func (rf *Raft) ticker() {
 		if (rf.state != leader) && now.Sub(rf.selectionTicker) > selectionTimeout {
 			rf.currentTerm += 1
 			rf.state = candidate
-			rf.selectionTicker = now
 			rf.votedFor = rf.me
-			go rf.voteAndCount(rf.currentTerm, len(rf.peers), rf.me)
+			go rf.startElection(rf.currentTerm, len(rf.peers), rf.me)
 		}
 		rf.mu.Unlock()
 
@@ -409,7 +411,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (3A, 3B, 3C).
+	rf.currentTerm = 0
 	rf.votedFor = unVoted
+	rf.state = follower
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
