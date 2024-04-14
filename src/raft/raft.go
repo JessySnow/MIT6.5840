@@ -206,19 +206,60 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	// 卫语句
 	if args.Term < rf.currentTerm {
 		reply.Success = false
 		reply.Term = rf.currentTerm
+		return
 	} else if args.Term > rf.currentTerm {
 		rf.state = follower
 		rf.currentTerm = args.Term
 		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
 		reply.Success = true
-	} else {
+		return
+	} else if args.Entries == nil || len(args.Entries) == 0 {
+		// 心跳包处理
 		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
 		reply.Success = true
+	}
+
+	// 0. 检查在相同索引 prevLogIndex 上日志的任期是否相同
+	prevLogIndex := args.PrevLogIndex
+	prevTerm := args.PrevLogTerm
+	if prevLogIndex > len(rf.log) || rf.log[args.PrevLogIndex].Term != prevTerm {
+		reply.Term = args.Term
+		reply.Success = false
+		return
+	}
+
+	// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
+	argEntries := args.Entries
+	for i := argEntries[0].Index; i < len(rf.log); i++ {
+		if rf.log[i].Term != argEntries[i].Term {
+			rf.log = rf.log[:i]
+			break
+		}
+	}
+
+	// 2. 向接受者的日志中添加原本不存在的日志项
+	lastIndex := rf.log[len(rf.log)-1].Index
+	newEntries := make([]LogEntry, 0)
+	for i, entry := range args.Entries {
+		if entry.Index > lastIndex {
+			newEntries = argEntries[i:]
+		}
+	}
+	rf.log = append(rf.log, newEntries...)
+
+	// 3. 更新日志的提交情况
+	if args.LeaderCommit > rf.commitIndex {
+		if args.LeaderCommit > rf.log[len(rf.log)-1].Index {
+			rf.commitIndex = rf.log[len(rf.log)-1].Index
+		} else {
+			rf.commitIndex = args.LeaderCommit
+		}
 	}
 }
 
