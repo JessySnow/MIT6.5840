@@ -314,7 +314,7 @@ func (rf *Raft) startHeartBeat() {
 
 		go func() {
 			for {
-				rf.sendAppendEntries(rf.me, &AppendEntriesArgs{term, rf.me}, &AppendEntriesReply{})
+				rf.sendAppendEntries(rf.me, &AppendEntriesArgs{Term: term, LeaderId: rf.me}, &AppendEntriesReply{})
 				time.Sleep(heartbeatInterval)
 			}
 		}()
