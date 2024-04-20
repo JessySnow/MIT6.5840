@@ -35,7 +35,7 @@ const (
 )
 
 const copyLogsInterval = 100 * time.Millisecond
-const selectionTimeout = 350 * time.Millisecond
+const selectionTimeout = 550 * time.Millisecond
 const unVoted = -1
 
 // as each Raft peer becomes aware that successive log entries are
@@ -397,6 +397,7 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
 			reply := new(RequestVoteReply)
 			for !rf.sendRequestVote(index, arg, reply) {
+				time.Sleep(1 * time.Millisecond)
 			}
 
 			// 2. 判断计票是否已经结束，未结束将发送结果到计票逻辑中
@@ -418,6 +419,7 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 			// 双重检查，防止被其他的协程修改了状态
 			// term 过期切换到下一个任期，并修改状态为 follower
 			if reply.Term > rf.currentTerm {
+				rf.votedFor = unVoted
 				rf.currentTerm = reply.Term
 				rf.state = follower
 				rf.selectionTicker = time.Now()
@@ -559,7 +561,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
-	//go rf.applyLog()
 
 	return rf
 }
