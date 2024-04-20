@@ -219,7 +219,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = true
 		return
 	} else if args.Entries == nil || len(args.Entries) == 0 {
-		// 心跳包处理
 		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
 		reply.Success = true
@@ -249,6 +248,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	for i, entry := range args.Entries {
 		if entry.Index > lastIndex {
 			newEntries = argEntries[i:]
+			break
 		}
 	}
 	rf.log = append(rf.log, newEntries...)
@@ -301,6 +301,71 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	return ok
 }
 
+// copyLogEntries 通过 sendAppendEntries 将日志定期复制给 follower
+func (rf *Raft) copyLogEntries() {
+	for i := 0; i < len(rf.peers); i++ {
+		if i == rf.me {
+			continue
+		}
+
+		// 定时复制日志的逻辑
+		go func(index int) {
+			for {
+				rf.mu.Lock()
+
+				// 检查是否依然是 leader
+				if rf.state != leader {
+					return
+				}
+
+				startIndex := rf.nextIndex[index]
+				entries := make([]LogEntry, 0)
+				if startIndex < len(rf.log) {
+					entries = rf.log[startIndex:]
+				}
+				lastIndex := 0
+				if entries != nil && len(entries) > 0 {
+					lastIndex = entries[len(entries)-1].Index
+				}
+
+				// 构造请求和响应
+				prevLogIndex := rf.log[startIndex-1].Index
+				prevLogTerm := rf.log[startIndex-1].Term
+				arg := &AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me,
+					PrevLogIndex: prevLogIndex, PrevLogTerm: prevLogTerm,
+					LeaderCommit: rf.commitIndex, Entries: entries}
+				reply := &AppendEntriesReply{}
+				rf.mu.Unlock()
+
+				// 不断尝试复制，直到成功
+				for !rf.sendAppendEntries(index, arg, reply) {
+					time.Sleep(1 * time.Millisecond)
+				}
+
+				// 根据日志复制结果更新 Raft 状态
+				rf.mu.Lock()
+				if reply.Term > rf.currentTerm {
+					rf.currentTerm = reply.Term
+					rf.state = follower
+					rf.selectionTicker = time.Now()
+					return
+				}
+
+				if reply.Success {
+					rf.nextIndex[index] = lastIndex + 1
+					rf.matchIndex[index] = lastIndex
+				} else {
+					rf.nextIndex[index] = rf.nextIndex[index] - 1
+				}
+
+				rf.mu.Unlock()
+
+				time.Sleep(heartbeatInterval)
+			}
+		}(i)
+	}
+}
+
 // startHeartBeat leader 循环地并发发送请求到所有的接受者
 func (rf *Raft) startHeartBeat() {
 	rf.mu.Lock()
@@ -314,7 +379,8 @@ func (rf *Raft) startHeartBeat() {
 
 		go func() {
 			for {
-				rf.sendAppendEntries(rf.me, &AppendEntriesArgs{Term: term, LeaderId: rf.me}, &AppendEntriesReply{})
+				for !rf.sendAppendEntries(rf.me, &AppendEntriesArgs{Term: term, LeaderId: rf.me}, &AppendEntriesReply{}) {
+				}
 				time.Sleep(heartbeatInterval)
 			}
 		}()
@@ -378,7 +444,7 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 				if reply.Term == rf.currentTerm {
 					rf.state = leader
 					// 成为 leader 后立即发送心跳
-					go rf.startHeartBeat()
+					go rf.initLeader()
 				}
 				rf.mu.Unlock()
 				close(stopChan)
@@ -386,6 +452,23 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 			}
 		}
 	}
+}
+
+// initLeader 初始化服务器为 leader
+func (rf *Raft) initLeader() {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	// 初始化每台服务器下一个要提交的日志索引的切片
+	latestIndex := rf.log[len(rf.log)-1].Index
+	rf.nextIndex = make([]int, len(rf.peers))
+	for i := 0; i < len(rf.peers); i++ {
+		rf.nextIndex[i] = latestIndex
+	}
+	// 初始化每台服务器已知的已经复制的日志索引切片
+	rf.matchIndex = make([]int, len(rf.peers))
+
+	go rf.copyLogEntries()
 }
 
 // the service using Raft (e.g. a k/v server) wants to start
@@ -406,6 +489,12 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	isLeader := true
 
 	// Your code here (3B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if rf.state != leader {
+		return -1, -1, false
+	}
 
 	return index, term, isLeader
 }
@@ -472,12 +561,14 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.currentTerm = 0
 	rf.votedFor = unVoted
 	rf.state = follower
+	rf.log = make([]LogEntry, 1)
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
+	//go rf.applyLog()
 
 	return rf
 }
