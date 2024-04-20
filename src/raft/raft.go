@@ -233,27 +233,31 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
-	argEntries := args.Entries
-	for i := argEntries[0].Index; i < len(rf.log); i++ {
-		if rf.log[i].Term != argEntries[i].Term {
-			rf.log = rf.log[:i]
-			break
+	// 如果有附加日志
+	if len(args.Entries) != 0 {
+		// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
+		argEntries := args.Entries
+		for _, entry := range argEntries {
+			index := entry.Index
+			if index < len(rf.log) && rf.log[index].Term != entry.Term {
+				rf.log = rf.log[:index]
+				break
+			}
 		}
+
+		// 2. 向接受者的日志中添加原本不存在的日志项
+		lastIndex := rf.log[len(rf.log)-1].Index
+		newEntries := make([]LogEntry, 0)
+		for i, entry := range args.Entries {
+			if entry.Index > lastIndex {
+				newEntries = argEntries[i:]
+				break
+			}
+		}
+		rf.log = append(rf.log, newEntries...)
 	}
 
-	// 2. 向接受者的日志中添加原本不存在的日志项
-	lastIndex := rf.log[len(rf.log)-1].Index
-	newEntries := make([]LogEntry, 0)
-	for i, entry := range args.Entries {
-		if entry.Index > lastIndex {
-			newEntries = argEntries[i:]
-			break
-		}
-	}
-	rf.log = append(rf.log, newEntries...)
-
-	// 3. 更新日志的提交情况
+	// 3. 同步 leader 的日志的提交情况
 	if args.LeaderCommit > rf.commitIndex {
 		if args.LeaderCommit > rf.log[len(rf.log)-1].Index {
 			rf.commitIndex = rf.log[len(rf.log)-1].Index
@@ -324,7 +328,7 @@ func (rf *Raft) copyLogEntries() {
 					entries = rf.log[startIndex:]
 				}
 				lastIndex := 0
-				if entries != nil && len(entries) > 0 {
+				if len(entries) > 0 {
 					lastIndex = entries[len(entries)-1].Index
 				}
 
@@ -335,6 +339,7 @@ func (rf *Raft) copyLogEntries() {
 					PrevLogIndex: prevLogIndex, PrevLogTerm: prevLogTerm,
 					LeaderCommit: rf.commitIndex, Entries: entries}
 				reply := &AppendEntriesReply{}
+
 				rf.mu.Unlock()
 
 				// 不断尝试复制，直到成功
@@ -355,7 +360,11 @@ func (rf *Raft) copyLogEntries() {
 					rf.nextIndex[index] = lastIndex + 1
 					rf.matchIndex[index] = lastIndex
 				} else {
-					rf.nextIndex[index] = rf.nextIndex[index] - 1
+					if rf.nextIndex[index]-1 == 0 {
+						rf.nextIndex[index] = 1
+					} else {
+						rf.nextIndex[index] = rf.nextIndex[index] - 1
+					}
 				}
 
 				rf.mu.Unlock()
@@ -439,9 +448,12 @@ func (rf *Raft) initLeader() {
 	defer rf.mu.Unlock()
 
 	// 初始化每台服务器下一个要提交的日志索引的切片
-	latestIndex := rf.log[len(rf.log)-1].Index
+	latestIndex := rf.log[len(rf.log)-1].Index + 1
 	rf.nextIndex = make([]int, len(rf.peers))
 	for i := 0; i < len(rf.peers); i++ {
+		if i == rf.me {
+			continue
+		}
 		rf.nextIndex[i] = latestIndex
 	}
 	// 初始化每台服务器已知的已经复制的日志索引切片
@@ -463,9 +475,6 @@ func (rf *Raft) initLeader() {
 // term. the third return value is true if this server believes it is
 // the leader.
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
 
 	// Your code here (3B).
 	rf.mu.Lock()
@@ -475,7 +484,10 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		return -1, -1, false
 	}
 
-	return index, term, isLeader
+	// 新增日志条目
+	rf.log = append(rf.log, LogEntry{Term: rf.currentTerm, Command: command, Index: len(rf.log)})
+
+	return len(rf.log), rf.currentTerm, rf.state == leader
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
