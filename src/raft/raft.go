@@ -34,7 +34,7 @@ const (
 	leader
 )
 
-const heartbeatInterval = 100 * time.Millisecond
+const copyLogsInterval = 100 * time.Millisecond
 const selectionTimeout = 350 * time.Millisecond
 const unVoted = -1
 
@@ -360,30 +360,9 @@ func (rf *Raft) copyLogEntries() {
 
 				rf.mu.Unlock()
 
-				time.Sleep(heartbeatInterval)
+				time.Sleep(copyLogsInterval)
 			}
 		}(i)
-	}
-}
-
-// startHeartBeat leader 循环地并发发送请求到所有的接受者
-func (rf *Raft) startHeartBeat() {
-	rf.mu.Lock()
-	term := rf.currentTerm
-	defer rf.mu.Unlock()
-
-	for i := 0; i < len(rf.peers); i++ {
-		if i == rf.me {
-			continue
-		}
-
-		go func() {
-			for {
-				for !rf.sendAppendEntries(rf.me, &AppendEntriesArgs{Term: term, LeaderId: rf.me}, &AppendEntriesReply{}) {
-				}
-				time.Sleep(heartbeatInterval)
-			}
-		}()
 	}
 }
 
