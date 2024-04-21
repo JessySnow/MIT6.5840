@@ -167,28 +167,32 @@ type AppendEntriesReply struct {
 	Success bool
 }
 
-// RequestVote RPC handler.
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (3A, 3B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
 	if rf.currentTerm > args.Term {
-		// 拒绝任期小于自己的服务器的拉票请求
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
-	} else if rf.currentTerm < args.Term {
-		// 服务器任期过期，重置服务器状态
+		return
+	}
+	if rf.currentTerm < args.Term {
 		rf.currentTerm = args.Term
 		rf.state = candidate
 		rf.votedFor = args.CandidateId
-		reply.Term = rf.currentTerm
-		reply.VoteGranted = true
-	} else if rf.state != leader && (rf.votedFor == unVoted || rf.votedFor == args.CandidateId) {
-		// 任期相同且服务器不是 leader，如果未进行投票或者投给的拉票的服务器，则同意头拉票请求，且将自己转变为候选人
-		rf.state = candidate
 		rf.selectionTicker = time.Now()
-		reply.Term = rf.currentTerm
+		reply.Term = args.Term
+		reply.VoteGranted = true
+		return
+	}
+
+	if rf.state != leader && (rf.votedFor == unVoted || rf.votedFor == args.CandidateId) {
+		rf.currentTerm = args.Term
+		rf.state = candidate
+		rf.votedFor = args.CandidateId
+		rf.selectionTicker = time.Now()
+		reply.Term = args.Term
 		reply.VoteGranted = true
 	} else {
 		reply.Term = rf.currentTerm
@@ -391,7 +395,7 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
 			reply := new(RequestVoteReply)
 			for !rf.sendRequestVote(index, arg, reply) {
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(1 * time.Millisecond)
 			}
 
 			// 2. 判断计票是否已经结束，未结束将发送结果到计票逻辑中
@@ -406,7 +410,7 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 
 	// 计票
 	voteCount := 1
-	voteTarget := int(float64(len(rf.peers)/2.0) + 0.5)
+	voteTarget := int(float64(len(rf.peers))/2.0 + 0.5)
 	for reply := range replyChan {
 		rf.mu.Lock()
 
@@ -431,8 +435,9 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 
 		// 收到投票，计票
 		if reply.Term == rf.currentTerm && reply.VoteGranted {
+			DPrintf("server: [%d] got ticket from %d", rf.me, rf.currentTerm)
 			voteCount++
-			if voteCount > voteTarget {
+			if voteCount >= voteTarget {
 				rf.state = leader
 				latestIndex := len(rf.log)
 				rf.nextIndex = make([]int, len(rf.peers))
