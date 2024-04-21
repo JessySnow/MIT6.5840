@@ -319,32 +319,26 @@ func (rf *Raft) copyLogEntries() {
 
 				// 检查是否依然是 leader
 				if rf.state != leader {
+					rf.mu.Unlock()
 					return
 				}
 
 				startIndex := rf.nextIndex[index]
-				entries := make([]LogEntry, 0)
-				if startIndex < len(rf.log) {
-					entries = rf.log[startIndex:]
+				if startIndex >= len(rf.log) {
+					startIndex = len(rf.log)
 				}
-				lastIndex := 0
-				if len(entries) > 0 {
-					lastIndex = entries[len(entries)-1].Index
-				}
+				entries := rf.log[startIndex:]
 
-				// 构造请求和响应
-				prevLogIndex := rf.log[startIndex-1].Index
-				prevLogTerm := rf.log[startIndex-1].Term
 				arg := &AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me,
-					PrevLogIndex: prevLogIndex, PrevLogTerm: prevLogTerm,
+					PrevLogIndex: rf.log[startIndex-1].Index, PrevLogTerm: rf.log[startIndex-1].Term,
 					LeaderCommit: rf.commitIndex, Entries: entries}
-				reply := &AppendEntriesReply{}
+				reply := new(AppendEntriesReply)
 
 				rf.mu.Unlock()
 
 				// 不断尝试复制，直到成功
 				for !rf.sendAppendEntries(index, arg, reply) {
-					time.Sleep(1 * time.Millisecond)
+					time.Sleep(20 * time.Millisecond)
 				}
 
 				// 根据日志复制结果更新 Raft 状态
@@ -353,10 +347,15 @@ func (rf *Raft) copyLogEntries() {
 					rf.currentTerm = reply.Term
 					rf.state = follower
 					rf.selectionTicker = time.Now()
+					rf.mu.Unlock()
 					return
 				}
 
 				if reply.Success {
+					lastIndex := 0
+					if len(entries) > 0 {
+						lastIndex = entries[len(entries)-1].Index
+					}
 					rf.nextIndex[index] = lastIndex + 1
 					rf.matchIndex[index] = lastIndex
 				} else {
