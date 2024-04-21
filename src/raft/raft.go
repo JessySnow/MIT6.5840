@@ -137,17 +137,11 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 }
 
-// example RequestVote RPC arguments structure.
-// field names must start with capital letters!
 type RequestVoteArgs struct {
-	// Your data here (3A, 3B).
-	Term, CandidateId int
+	Term, CandidateId, LastLogIndex, LastLogTerm int
 }
 
-// example RequestVote RPC reply structure.
-// field names must start with capital letters!
 type RequestVoteReply struct {
-	// Your data here (3A).
 	Term        int
 	VoteGranted bool
 }
@@ -184,6 +178,19 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
 		reply.VoteGranted = true
+		return
+	}
+
+	lastTerm := rf.log[len(rf.log)-1].Term
+	lastIndex := rf.log[len(rf.log)-1].Index
+	if lastTerm > args.LastLogTerm {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+		return
+	}
+	if lastTerm == args.LastLogTerm && lastIndex > args.LastLogIndex {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
 		return
 	}
 
@@ -373,7 +380,7 @@ func (rf *Raft) copyLogEntries() {
 	}
 }
 
-func (rf *Raft) startElection(currentTerm, serverLength, me int) {
+func (rf *Raft) startElection(currentTerm, serverLength, me, lastLogIndex, lastLogTerm int) {
 	replyChan := make(chan *RequestVoteReply)
 	stopChan := make(chan struct{})
 
@@ -392,7 +399,8 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 			}
 
 			// 1. 发起 RPC 请求
-			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
+			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me,
+				LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
 			reply := new(RequestVoteReply)
 			for !rf.sendRequestVote(index, arg, reply) {
 				time.Sleep(1 * time.Millisecond)
@@ -517,7 +525,7 @@ func (rf *Raft) ticker() {
 			rf.votedFor = rf.me
 			rf.selectionTicker = now
 			// startElection
-			go rf.startElection(rf.currentTerm, len(rf.peers), rf.me)
+			go rf.startElection(rf.currentTerm, len(rf.peers), rf.me, len(rf.log)-1, rf.log[len(rf.log)-1].Term)
 		}
 
 		rf.mu.Unlock()
