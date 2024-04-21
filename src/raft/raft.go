@@ -80,19 +80,14 @@ type Raft struct {
 	matchIndex []int
 }
 
-// return currentTerm and whether this server
-// believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
 
-	var term int
-	var isleader bool
-	// Your code here (3A).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	term = rf.currentTerm
-	isleader = rf.state == leader
-	return term, isleader
+	isLeader := rf.state == leader
+	term := rf.currentTerm
+	return term, isLeader
 }
 
 // save Raft's persistent state to stable storage,
@@ -285,7 +280,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 // can't be reached, a lost request, or a lost reply.
 //
 // Call() is guaranteed to return (perhaps after a delay) *except* if the
-// handler function on the server side does not return.  Thus there
+// handler function on the server side does not return.  Thus, there
 // is no need to implement your own timeouts around Call().
 //
 // look at the comments in ../labrpc/labrpc.go for more details.
