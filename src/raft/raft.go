@@ -35,7 +35,7 @@ const (
 )
 
 const copyLogsInterval = 100 * time.Millisecond
-const selectionTimeout = 550 * time.Millisecond
+const selectionTimeout = 600 * time.Millisecond
 const unVoted = -1
 
 // as each Raft peer becomes aware that successive log entries are
@@ -435,7 +435,6 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 
 		// 收到投票，计票
 		if reply.Term == rf.currentTerm && reply.VoteGranted {
-			DPrintf("server: [%d] got ticket from %d", rf.me, rf.currentTerm)
 			voteCount++
 			if voteCount >= voteTarget {
 				rf.state = leader
