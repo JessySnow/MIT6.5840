@@ -397,7 +397,7 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me}
 			reply := new(RequestVoteReply)
 			for !rf.sendRequestVote(index, arg, reply) {
-				time.Sleep(1 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 			}
 
 			// 2. 判断计票是否已经结束，未结束将发送结果到计票逻辑中
@@ -412,56 +412,50 @@ func (rf *Raft) startElection(currentTerm, serverLength, me int) {
 
 	// 计票
 	voteCount := 1
-	voteTarget := len(rf.peers) / 2
+	voteTarget := int(float64(len(rf.peers)/2.0) + 0.5)
 	for reply := range replyChan {
-		if reply.Term > currentTerm {
-			rf.mu.Lock()
-			// 双重检查，防止被其他的协程修改了状态
-			// term 过期切换到下一个任期，并修改状态为 follower
-			if reply.Term > rf.currentTerm {
-				rf.votedFor = unVoted
-				rf.currentTerm = reply.Term
-				rf.state = follower
-				rf.selectionTicker = time.Now()
-			}
+		rf.mu.Lock()
+
+		// 状态检查，避免后续无用功
+		if rf.state == follower {
 			rf.mu.Unlock()
 			close(stopChan)
-			return
-		} else if reply.Term == currentTerm && reply.VoteGranted {
-			voteCount += 1
+			break
+		}
+
+		// 任期过期，回归到 follower 状态
+		if reply.Term > rf.currentTerm {
+			rf.votedFor = unVoted
+			rf.currentTerm = reply.Term
+			rf.state = follower
+			rf.selectionTicker = time.Now()
+
+			rf.mu.Unlock()
+			close(stopChan)
+			break
+		}
+
+		// 收到投票，计票
+		if reply.Term == rf.currentTerm && reply.VoteGranted {
+			voteCount++
 			if voteCount > voteTarget {
-				rf.mu.Lock()
-				if reply.Term == rf.currentTerm {
-					rf.state = leader
-					// 成为 leader 后立即发送心跳
-					go rf.initLeader()
+				rf.state = leader
+				latestIndex := len(rf.log)
+				rf.nextIndex = make([]int, len(rf.peers))
+				for i := 0; i < len(rf.peers); i++ {
+					rf.nextIndex[i] = latestIndex
 				}
+				rf.matchIndex = make([]int, len(rf.peers))
+				go rf.copyLogEntries()
+
 				rf.mu.Unlock()
 				close(stopChan)
-				return
+				break
 			}
 		}
+
+		rf.mu.Unlock()
 	}
-}
-
-// initLeader 初始化服务器为 leader
-func (rf *Raft) initLeader() {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
-	// 初始化每台服务器下一个要提交的日志索引的切片
-	latestIndex := rf.log[len(rf.log)-1].Index + 1
-	rf.nextIndex = make([]int, len(rf.peers))
-	for i := 0; i < len(rf.peers); i++ {
-		if i == rf.me {
-			continue
-		}
-		rf.nextIndex[i] = latestIndex
-	}
-	// 初始化每台服务器已知的已经复制的日志索引切片
-	rf.matchIndex = make([]int, len(rf.peers))
-
-	go rf.copyLogEntries()
 }
 
 // the service using Raft (e.g. a k/v server) wants to start
@@ -515,16 +509,19 @@ func (rf *Raft) killed() bool {
 func (rf *Raft) ticker() {
 	for rf.killed() == false {
 
-		// Your code here (3A)
-		// Check if a leader election should be started.
-		now := time.Now()
 		rf.mu.Lock()
-		if (rf.state != leader) && now.Sub(rf.selectionTicker) > selectionTimeout {
-			rf.currentTerm += 1
+
+		now := time.Now()
+		if (rf.state != leader) && (now.Sub(rf.selectionTicker) > selectionTimeout) {
+			// initCandidate
 			rf.state = candidate
+			rf.currentTerm += 1
 			rf.votedFor = rf.me
+			rf.selectionTicker = now
+			// startElection
 			go rf.startElection(rf.currentTerm, len(rf.peers), rf.me)
 		}
+
 		rf.mu.Unlock()
 
 		// pause for a random amount of time between 50 and 350
