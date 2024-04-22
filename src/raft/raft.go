@@ -212,18 +212,18 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	// 卫语句
 	if args.Term < rf.currentTerm {
-		reply.Success = false
 		reply.Term = rf.currentTerm
+		reply.Success = false
 		return
-	} else if args.Term > rf.currentTerm {
+	}
+
+	if args.Term > rf.currentTerm {
 		rf.state = follower
 		rf.currentTerm = args.Term
 		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
 		reply.Success = true
-		return
 	} else if args.Entries == nil || len(args.Entries) == 0 {
 		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
@@ -305,13 +305,13 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
-// sendAppendEntries 发送日志复制，心跳
+// sendAppendEntries 发送日志
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
 
-// copyLogEntries 通过 sendAppendEntries 将日志定期复制给 follower
+// copyLogEntries 将日志定期复制给 follower
 func (rf *Raft) copyLogEntries() {
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
@@ -323,38 +323,42 @@ func (rf *Raft) copyLogEntries() {
 			for {
 				rf.mu.Lock()
 
-				// 检查是否依然是 leader
 				if rf.state != leader {
 					rf.mu.Unlock()
-					return
+					break
 				}
 
-				startIndex := rf.nextIndex[index]
-				if startIndex >= len(rf.log) {
-					startIndex = len(rf.log)
-				}
+				startIndex := min(rf.nextIndex[index], len(rf.log))
 				entries := rf.log[startIndex:]
-
 				arg := &AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me,
 					PrevLogIndex: rf.log[startIndex-1].Index, PrevLogTerm: rf.log[startIndex-1].Term,
 					LeaderCommit: rf.commitIndex, Entries: entries}
-				reply := new(AppendEntriesReply)
+				reply := &AppendEntriesReply{}
 
 				rf.mu.Unlock()
 
-				// 不断尝试复制，直到成功
 				for !rf.sendAppendEntries(index, arg, reply) {
 					time.Sleep(20 * time.Millisecond)
 				}
 
 				// 根据日志复制结果更新 Raft 状态
 				rf.mu.Lock()
+
+				if rf.state != leader {
+					rf.mu.Unlock()
+					break
+				}
+
+				if reply.Term < rf.currentTerm {
+					rf.mu.Unlock()
+					continue
+				}
 				if reply.Term > rf.currentTerm {
 					rf.currentTerm = reply.Term
 					rf.state = follower
 					rf.selectionTicker = time.Now()
 					rf.mu.Unlock()
-					return
+					break
 				}
 
 				if reply.Success {
@@ -380,33 +384,30 @@ func (rf *Raft) copyLogEntries() {
 	}
 }
 
-func (rf *Raft) startElection(currentTerm, serverLength, me, lastLogIndex, lastLogTerm int) {
+func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 	replyChan := make(chan *RequestVoteReply)
 	stopChan := make(chan struct{})
 
 	// 并发拉票
-	for i := 0; i < serverLength; i++ {
-		if i == me {
+	for i := 0; i < len(rf.peers); i++ {
+		if i == rf.me {
 			continue
 		}
 
 		go func(index int) {
-			// 0. 判断计票是否已经结束,快速退出
 			select {
 			case <-stopChan:
 				return
 			default:
 			}
 
-			// 1. 发起 RPC 请求
-			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: me,
+			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: rf.me,
 				LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
 			reply := new(RequestVoteReply)
 			for !rf.sendRequestVote(index, arg, reply) {
 				time.Sleep(1 * time.Millisecond)
 			}
 
-			// 2. 判断计票是否已经结束，未结束将发送结果到计票逻辑中
 			select {
 			case <-stopChan:
 				return
@@ -518,14 +519,12 @@ func (rf *Raft) ticker() {
 		rf.mu.Lock()
 
 		now := time.Now()
-		if (rf.state != leader) && (now.Sub(rf.selectionTicker) > selectionTimeout) {
-			// initCandidate
+		if (rf.state != leader) && (now.Sub(rf.selectionTicker) >= selectionTimeout) {
 			rf.state = candidate
 			rf.currentTerm += 1
 			rf.votedFor = rf.me
 			rf.selectionTicker = now
-			// startElection
-			go rf.startElection(rf.currentTerm, len(rf.peers), rf.me, len(rf.log)-1, rf.log[len(rf.log)-1].Term)
+			go rf.startElection(rf.currentTerm, len(rf.log)-1, rf.log[len(rf.log)-1].Term)
 		}
 
 		rf.mu.Unlock()
