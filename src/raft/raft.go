@@ -35,7 +35,7 @@ const (
 )
 
 const copyLogsInterval = 100 * time.Millisecond
-const selectionTimeout = 600 * time.Millisecond
+const selectionTimeout = 400 * time.Millisecond
 const unVoted = -1
 
 // as each Raft peer becomes aware that successive log entries are
@@ -209,6 +209,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 // AppendEntries 接受 leader 的日志和心跳
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	DPrintf("server[%d] receive from server[%d]", rf.me, args.LeaderId)
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
@@ -338,7 +339,8 @@ func (rf *Raft) copyLogEntries() {
 				rf.mu.Unlock()
 
 				for !rf.sendAppendEntries(index, arg, reply) {
-					time.Sleep(20 * time.Millisecond)
+					DPrintf("leader:[%d] copying log to %d", rf.me, index)
+					time.Sleep(50 * time.Millisecond)
 				}
 
 				// 根据日志复制结果更新 Raft 状态
@@ -401,9 +403,8 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 			default:
 			}
 
-			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: rf.me,
-				LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
-			reply := new(RequestVoteReply)
+			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: rf.me, LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
+			reply := &RequestVoteReply{}
 			for !rf.sendRequestVote(index, arg, reply) {
 				time.Sleep(1 * time.Millisecond)
 			}
