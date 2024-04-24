@@ -223,6 +223,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.state = follower
 		rf.currentTerm = args.Term
 		rf.selectionTicker = time.Now()
+		rf.votedFor = unVoted
 		reply.Term = args.Term
 		reply.Success = true
 	} else if args.Entries == nil || len(args.Entries) == 0 {
@@ -231,47 +232,47 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = true
 	}
 
-	// 0. 检查在相同索引 prevLogIndex 上日志的任期是否相同
-	prevLogIndex := args.PrevLogIndex
-	prevTerm := args.PrevLogTerm
-	if prevLogIndex > len(rf.log) || rf.log[args.PrevLogIndex].Term != prevTerm {
-		reply.Term = args.Term
-		reply.Success = false
-		return
-	}
-
-	// 如果有附加日志
-	if len(args.Entries) != 0 {
-		// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
-		argEntries := args.Entries
-		for _, entry := range argEntries {
-			index := entry.Index
-			if index < len(rf.log) && rf.log[index].Term != entry.Term {
-				rf.log = rf.log[:index]
-				break
-			}
-		}
-
-		// 2. 向接受者的日志中添加原本不存在的日志项
-		lastIndex := rf.log[len(rf.log)-1].Index
-		newEntries := make([]LogEntry, 0)
-		for i, entry := range args.Entries {
-			if entry.Index > lastIndex {
-				newEntries = argEntries[i:]
-				break
-			}
-		}
-		rf.log = append(rf.log, newEntries...)
-	}
-
-	// 3. 同步 leader 的日志的提交情况
-	if args.LeaderCommit > rf.commitIndex {
-		if args.LeaderCommit > rf.log[len(rf.log)-1].Index {
-			rf.commitIndex = rf.log[len(rf.log)-1].Index
-		} else {
-			rf.commitIndex = args.LeaderCommit
-		}
-	}
+	//// 0. 检查在相同索引 prevLogIndex 上日志的任期是否相同
+	//prevLogIndex := args.PrevLogIndex
+	//prevTerm := args.PrevLogTerm
+	//if prevLogIndex > len(rf.log) || rf.log[args.PrevLogIndex].Term != prevTerm {
+	//	reply.Term = args.Term
+	//	reply.Success = false
+	//	return
+	//}
+	//
+	//// 如果有附加日志
+	//if len(args.Entries) != 0 {
+	//	// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
+	//	argEntries := args.Entries
+	//	for _, entry := range argEntries {
+	//		index := entry.Index
+	//		if index < len(rf.log) && rf.log[index].Term != entry.Term {
+	//			rf.log = rf.log[:index]
+	//			break
+	//		}
+	//	}
+	//
+	//	// 2. 向接受者的日志中添加原本不存在的日志项
+	//	lastIndex := rf.log[len(rf.log)-1].Index
+	//	newEntries := make([]LogEntry, 0)
+	//	for i, entry := range args.Entries {
+	//		if entry.Index > lastIndex {
+	//			newEntries = argEntries[i:]
+	//			break
+	//		}
+	//	}
+	//	rf.log = append(rf.log, newEntries...)
+	//}
+	//
+	//// 3. 同步 leader 的日志的提交情况
+	//if args.LeaderCommit > rf.commitIndex {
+	//	if args.LeaderCommit > rf.log[len(rf.log)-1].Index {
+	//		rf.commitIndex = rf.log[len(rf.log)-1].Index
+	//	} else {
+	//		rf.commitIndex = args.LeaderCommit
+	//	}
+	//}
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -308,8 +309,20 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 
 // sendAppendEntries 发送日志
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
-	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
-	return ok
+	tick := time.Tick(50 * time.Millisecond)
+	doneChan := make(chan bool)
+
+	go func() {
+		ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
+		doneChan <- ok
+	}()
+
+	select {
+	case <-tick:
+		return false
+	case ok := <-doneChan:
+		return ok
+	}
 }
 
 // copyLogEntries 将日志定期复制给 follower
@@ -323,24 +336,20 @@ func (rf *Raft) copyLogEntries() {
 		go func(index int) {
 			for {
 				rf.mu.Lock()
-
-				if rf.state != leader {
-					rf.mu.Unlock()
-					break
-				}
-
+				DPrintf("server[%d] prepare send to server[%d] ", rf.me, index)
 				startIndex := min(rf.nextIndex[index], len(rf.log))
 				entries := rf.log[startIndex:]
 				arg := &AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me,
 					PrevLogIndex: rf.log[startIndex-1].Index, PrevLogTerm: rf.log[startIndex-1].Term,
 					LeaderCommit: rf.commitIndex, Entries: entries}
 				reply := &AppendEntriesReply{}
-
 				rf.mu.Unlock()
 
-				for !rf.sendAppendEntries(index, arg, reply) {
-					DPrintf("leader:[%d] copying log to %d", rf.me, index)
-					time.Sleep(50 * time.Millisecond)
+				DPrintf("server[%d] try send to server[%d] ", rf.me, index)
+				if !rf.sendAppendEntries(index, arg, reply) {
+					DPrintf("server[%d] send to server[%d] failed", rf.me, index)
+					time.Sleep(copyLogsInterval)
+					continue
 				}
 
 				// 根据日志复制结果更新 Raft 状态
@@ -350,7 +359,6 @@ func (rf *Raft) copyLogEntries() {
 					rf.mu.Unlock()
 					break
 				}
-
 				if reply.Term < rf.currentTerm {
 					rf.mu.Unlock()
 					continue
@@ -363,25 +371,26 @@ func (rf *Raft) copyLogEntries() {
 					break
 				}
 
-				if reply.Success {
-					lastIndex := 0
-					if len(entries) > 0 {
-						lastIndex = entries[len(entries)-1].Index
-					}
-					rf.nextIndex[index] = lastIndex + 1
-					rf.matchIndex[index] = lastIndex
-				} else {
-					if rf.nextIndex[index]-1 == 0 {
-						rf.nextIndex[index] = 1
-					} else {
-						rf.nextIndex[index] = rf.nextIndex[index] - 1
-					}
-				}
+				//if reply.Success {
+				//	lastIndex := 0
+				//	if len(entries) > 0 {
+				//		lastIndex = entries[len(entries)-1].Index
+				//	}
+				//	rf.nextIndex[index] = lastIndex + 1
+				//	rf.matchIndex[index] = lastIndex
+				//} else {
+				//	if rf.nextIndex[index]-1 == 0 {
+				//		rf.nextIndex[index] = 1
+				//	} else {
+				//		rf.nextIndex[index] = rf.nextIndex[index] - 1
+				//	}
+				//}
 
 				rf.mu.Unlock()
 
 				time.Sleep(copyLogsInterval)
 			}
+			DPrintf("server[%d] break send to server[%d]", rf.me, index)
 		}(i)
 	}
 }
@@ -518,7 +527,6 @@ func (rf *Raft) ticker() {
 	for rf.killed() == false {
 
 		rf.mu.Lock()
-
 		now := time.Now()
 		if (rf.state != leader) && (now.Sub(rf.selectionTicker) >= selectionTimeout) {
 			rf.state = candidate
@@ -527,11 +535,8 @@ func (rf *Raft) ticker() {
 			rf.selectionTicker = now
 			go rf.startElection(rf.currentTerm, len(rf.log)-1, rf.log[len(rf.log)-1].Term)
 		}
-
 		rf.mu.Unlock()
 
-		// pause for a random amount of time between 50 and 350
-		// milliseconds.
 		ms := 50 + (rand.Int63() % 300)
 		time.Sleep(time.Duration(ms) * time.Millisecond)
 	}
