@@ -35,6 +35,7 @@ const (
 )
 
 const copyLogsInterval = 100 * time.Millisecond
+const applyMsgInterval = 100 * time.Millisecond
 const selectionTimeout = 400 * time.Millisecond
 const rpcTimeout = 20 * time.Millisecond
 const unVoted = -1
@@ -60,7 +61,6 @@ type ApplyMsg struct {
 	SnapshotIndex int
 }
 
-// A Go object implementing a single Raft peer.
 type Raft struct {
 	mu        sync.Mutex          // Lock to protect shared access to this peer's state
 	peers     []*labrpc.ClientEnd // RPC end points of all peers
@@ -79,6 +79,8 @@ type Raft struct {
 
 	nextIndex  []int
 	matchIndex []int
+
+	applyCh chan ApplyMsg
 }
 
 func (rf *Raft) GetState() (int, bool) {
@@ -303,30 +305,42 @@ func (rf *Raft) copyLogEntries() {
 					continue
 				}
 				if reply.Term > rf.currentTerm {
-					rf.currentTerm = reply.Term
 					rf.state = follower
+					rf.votedFor = unVoted
+					rf.currentTerm = reply.Term
 					rf.selectionTicker = time.Now()
 					rf.mu.Unlock()
 					break
 				}
 
-				//if reply.Success {
-				//	lastIndex := 0
-				//	if len(entries) > 0 {
-				//		lastIndex = entries[len(entries)-1].Index
-				//	}
-				//	rf.nextIndex[index] = lastIndex + 1
-				//	rf.matchIndex[index] = lastIndex
-				//} else {
-				//	if rf.nextIndex[index]-1 == 0 {
-				//		rf.nextIndex[index] = 1
-				//	} else {
-				//		rf.nextIndex[index] = rf.nextIndex[index] - 1
-				//	}
-				//}
+				if reply.Success {
+					lastIndex := max(rf.nextIndex[index], entries[len(entries)].Index)
+					rf.nextIndex[index] = lastIndex + 1
+					rf.matchIndex[index] = lastIndex
+				} else {
+					rf.nextIndex[index] = rf.nextIndex[index] - 1
+				}
+
+				for i := rf.commitIndex + 1; i < len(rf.log); i++ {
+					inc := true
+					for j, matchIndex := range rf.matchIndex {
+						if j == rf.me {
+							continue
+						}
+						if matchIndex < i || rf.log[i].Term != rf.currentTerm {
+							inc = false
+							break
+						}
+					}
+
+					if inc {
+						rf.commitIndex = i
+					} else {
+						break
+					}
+				}
 
 				rf.mu.Unlock()
-
 				time.Sleep(copyLogsInterval)
 			}
 		}(i)
@@ -404,6 +418,18 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 	}
 }
 
+func (rf *Raft) applyCommand() {
+	for {
+		rf.mu.Lock()
+		for rf.lastApplied <= rf.commitIndex {
+			rf.applyCh <- ApplyMsg{Command: rf.log[rf.lastApplied].Command, CommandIndex: rf.lastApplied, CommandValid: true}
+			rf.lastApplied++
+		}
+		rf.mu.Unlock()
+		time.Sleep(applyMsgInterval)
+	}
+}
+
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
 // server isn't the leader, returns false. otherwise start the
@@ -417,8 +443,6 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 // term. the third return value is true if this server believes it is
 // the leader.
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
-
-	// Your code here (3B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
@@ -426,9 +450,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		return -1, -1, false
 	}
 
-	// 新增日志条目
 	rf.log = append(rf.log, LogEntry{Term: rf.currentTerm, Command: command, Index: len(rf.log)})
-
 	return len(rf.log), rf.currentTerm, rf.state == leader
 }
 
@@ -492,6 +514,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.votedFor = unVoted
 	rf.state = follower
 	rf.log = make([]LogEntry, 1)
+	rf.applyCh = applyCh
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
 
@@ -500,6 +523,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
+	go rf.applyCommand()
 
 	return rf
 }
