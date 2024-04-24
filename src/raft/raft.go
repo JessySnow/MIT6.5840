@@ -36,6 +36,7 @@ const (
 
 const copyLogsInterval = 100 * time.Millisecond
 const selectionTimeout = 400 * time.Millisecond
+const rpcTimeout = 20 * time.Millisecond
 const unVoted = -1
 
 // as each Raft peer becomes aware that successive log entries are
@@ -209,7 +210,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 // AppendEntries 接受 leader 的日志和心跳
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
-	DPrintf("server[%d] receive from server[%d]", rf.me, args.LeaderId)
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
@@ -303,24 +303,30 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 // that the caller passes the address of the reply struct with &, not
 // the struct itself.
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
-	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
-	return ok
+	c := make(chan bool)
+	go func() {
+		c <- rf.peers[server].Call("Raft.RequestVote", args, reply)
+	}()
+
+	select {
+	case <-time.Tick(rpcTimeout):
+		return false
+	case ok := <-c:
+		return ok
+	}
 }
 
 // sendAppendEntries 发送日志
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
-	tick := time.Tick(50 * time.Millisecond)
-	doneChan := make(chan bool)
-
+	c := make(chan bool)
 	go func() {
-		ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
-		doneChan <- ok
+		c <- rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	}()
 
 	select {
-	case <-tick:
+	case <-time.Tick(rpcTimeout):
 		return false
-	case ok := <-doneChan:
+	case ok := <-c:
 		return ok
 	}
 }
@@ -336,7 +342,6 @@ func (rf *Raft) copyLogEntries() {
 		go func(index int) {
 			for {
 				rf.mu.Lock()
-				DPrintf("server[%d] prepare send to server[%d] ", rf.me, index)
 				startIndex := min(rf.nextIndex[index], len(rf.log))
 				entries := rf.log[startIndex:]
 				arg := &AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me,
@@ -345,9 +350,7 @@ func (rf *Raft) copyLogEntries() {
 				reply := &AppendEntriesReply{}
 				rf.mu.Unlock()
 
-				DPrintf("server[%d] try send to server[%d] ", rf.me, index)
 				if !rf.sendAppendEntries(index, arg, reply) {
-					DPrintf("server[%d] send to server[%d] failed", rf.me, index)
 					time.Sleep(copyLogsInterval)
 					continue
 				}
@@ -390,7 +393,6 @@ func (rf *Raft) copyLogEntries() {
 
 				time.Sleep(copyLogsInterval)
 			}
-			DPrintf("server[%d] break send to server[%d]", rf.me, index)
 		}(i)
 	}
 }
@@ -399,7 +401,6 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 	replyChan := make(chan *RequestVoteReply)
 	stopChan := make(chan struct{})
 
-	// 并发拉票
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
@@ -415,7 +416,7 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: rf.me, LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
 			reply := &RequestVoteReply{}
 			for !rf.sendRequestVote(index, arg, reply) {
-				time.Sleep(1 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 			}
 
 			select {
@@ -427,7 +428,6 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 		}(i)
 	}
 
-	// 计票
 	voteCount := 1
 	voteTarget := int(float64(len(rf.peers))/2.0 + 0.5)
 	for reply := range replyChan {
