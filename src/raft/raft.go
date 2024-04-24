@@ -171,8 +171,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		return
-	}
-	if rf.currentTerm < args.Term {
+	} else if rf.currentTerm < args.Term {
 		rf.currentTerm = args.Term
 		rf.state = candidate
 		rf.votedFor = args.CandidateId
@@ -208,7 +207,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 }
 
-// AppendEntries 接受 leader 的日志和心跳
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -219,60 +217,40 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
+	reply.Term = rf.currentTerm
+	rf.selectionTicker = time.Now()
 	if args.Term > rf.currentTerm {
 		rf.state = follower
 		rf.currentTerm = args.Term
-		rf.selectionTicker = time.Now()
 		rf.votedFor = unVoted
-		reply.Term = args.Term
-		reply.Success = true
-	} else if args.Entries == nil || len(args.Entries) == 0 {
-		rf.selectionTicker = time.Now()
-		reply.Term = args.Term
-		reply.Success = true
 	}
 
-	//// 0. 检查在相同索引 prevLogIndex 上日志的任期是否相同
-	//prevLogIndex := args.PrevLogIndex
-	//prevTerm := args.PrevLogTerm
-	//if prevLogIndex > len(rf.log) || rf.log[args.PrevLogIndex].Term != prevTerm {
-	//	reply.Term = args.Term
-	//	reply.Success = false
-	//	return
-	//}
-	//
-	//// 如果有附加日志
-	//if len(args.Entries) != 0 {
-	//	// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
-	//	argEntries := args.Entries
-	//	for _, entry := range argEntries {
-	//		index := entry.Index
-	//		if index < len(rf.log) && rf.log[index].Term != entry.Term {
-	//			rf.log = rf.log[:index]
-	//			break
-	//		}
-	//	}
-	//
-	//	// 2. 向接受者的日志中添加原本不存在的日志项
-	//	lastIndex := rf.log[len(rf.log)-1].Index
-	//	newEntries := make([]LogEntry, 0)
-	//	for i, entry := range args.Entries {
-	//		if entry.Index > lastIndex {
-	//			newEntries = argEntries[i:]
-	//			break
-	//		}
-	//	}
-	//	rf.log = append(rf.log, newEntries...)
-	//}
-	//
-	//// 3. 同步 leader 的日志的提交情况
-	//if args.LeaderCommit > rf.commitIndex {
-	//	if args.LeaderCommit > rf.log[len(rf.log)-1].Index {
-	//		rf.commitIndex = rf.log[len(rf.log)-1].Index
-	//	} else {
-	//		rf.commitIndex = args.LeaderCommit
-	//	}
-	//}
+	// 0. 检查在相同索引 prevLogIndex 上日志的任期是否相同
+	prevLogIndex := args.PrevLogIndex
+	prevLogTerm := args.PrevLogTerm
+	if prevLogIndex >= len(rf.log) || rf.log[prevLogIndex].Term != prevLogTerm {
+		reply.Success = false
+		return
+	}
+
+	// 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
+	argEntries := args.Entries
+	for i, entry := range argEntries {
+		index := entry.Index
+		if index < len(rf.log) && rf.log[index].Term != entry.Term {
+			rf.log = rf.log[:index]
+			rf.log = append(rf.log, args.Entries[i:]...)
+			break
+		} else {
+			rf.log = append(rf.log, args.Entries[i:]...)
+			break
+		}
+	}
+
+	//  同步 leader 的日志的提交情况
+	if args.LeaderCommit > rf.commitIndex {
+		rf.commitIndex = min(len(rf.log)-1, args.LeaderCommit)
+	}
 }
 
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
@@ -289,7 +267,6 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	}
 }
 
-// sendAppendEntries 发送日志
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	c := make(chan bool)
 	go func() {
@@ -304,7 +281,6 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	}
 }
 
-// copyLogEntries 将日志定期复制给 follower
 func (rf *Raft) copyLogEntries() {
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
@@ -328,7 +304,6 @@ func (rf *Raft) copyLogEntries() {
 					continue
 				}
 
-				// 根据日志复制结果更新 Raft 状态
 				rf.mu.Lock()
 
 				if rf.state != leader {
