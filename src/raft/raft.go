@@ -179,31 +179,19 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.Term = args.Term
 		reply.VoteGranted = true
 		return
+	} else if rf.state != follower {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+		return
 	}
 
+	reply.Term = rf.currentTerm
 	lastTerm := rf.log[len(rf.log)-1].Term
 	lastIndex := rf.log[len(rf.log)-1].Index
-	if lastTerm > args.LastLogTerm {
-		reply.Term = rf.currentTerm
+	if lastTerm > args.LastLogTerm || lastIndex > args.LastLogIndex {
 		reply.VoteGranted = false
-		return
-	}
-	if lastTerm == args.LastLogTerm && lastIndex > args.LastLogIndex {
-		reply.Term = rf.currentTerm
-		reply.VoteGranted = false
-		return
-	}
-
-	if rf.state != leader && (rf.votedFor == unVoted || rf.votedFor == args.CandidateId) {
-		rf.currentTerm = args.Term
-		rf.state = candidate
-		rf.votedFor = args.CandidateId
-		rf.selectionTicker = time.Now()
-		reply.Term = args.Term
-		reply.VoteGranted = true
 	} else {
-		reply.Term = rf.currentTerm
-		reply.VoteGranted = false
+		reply.VoteGranted = true
 	}
 }
 
