@@ -207,12 +207,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	reply.Term = rf.currentTerm
+	reply.Term = args.Term
+	reply.Success = true
 	rf.selectionTicker = time.Now()
 	if args.Term > rf.currentTerm {
 		rf.state = follower
-		rf.currentTerm = args.Term
 		rf.votedFor = unVoted
+		rf.currentTerm = args.Term
 	}
 
 	// 0. 检查在相同索引 prevLogIndex 上日志的任期是否相同
@@ -313,11 +314,12 @@ func (rf *Raft) copyLogEntries() {
 					break
 				}
 
-				if reply.Success {
+				if reply.Success && len(entries) > 0 {
 					lastIndex := max(rf.nextIndex[index], entries[len(entries)].Index)
 					rf.nextIndex[index] = lastIndex + 1
 					rf.matchIndex[index] = lastIndex
-				} else {
+				}
+				if !reply.Success {
 					rf.nextIndex[index] = rf.nextIndex[index] - 1
 				}
 
