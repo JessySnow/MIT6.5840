@@ -275,33 +275,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	//}
 }
 
-// example code to send a RequestVote RPC to a server.
-// server is the index of the target server in rf.peers[].
-// expects RPC arguments in args.
-// fills in *reply with RPC reply, so caller should
-// pass &reply.
-// the types of the args and reply passed to Call() must be
-// the same as the types of the arguments declared in the
-// handler function (including whether they are pointers).
-//
-// The labrpc package simulates a lossy network, in which servers
-// may be unreachable, and in which requests and replies may be lost.
-// Call() sends a request and waits for a reply. If a reply arrives
-// within a timeout interval, Call() returns true; otherwise
-// Call() returns false. Thus Call() may not return for a while.
-// A false return can be caused by a dead server, a live server that
-// can't be reached, a lost request, or a lost reply.
-//
-// Call() is guaranteed to return (perhaps after a delay) *except* if the
-// handler function on the server side does not return.  Thus, there
-// is no need to implement your own timeouts around Call().
-//
-// look at the comments in ../labrpc/labrpc.go for more details.
-//
-// if you're having trouble getting RPC to work, check that you've
-// capitalized all field names in structs passed over RPC, and
-// that the caller passes the address of the reply struct with &, not
-// the struct itself.
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	c := make(chan bool)
 	go func() {
@@ -416,7 +389,6 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 			arg := &RequestVoteArgs{Term: currentTerm, CandidateId: rf.me, LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
 			reply := &RequestVoteReply{}
 			for !rf.sendRequestVote(index, arg, reply) {
-				time.Sleep(10 * time.Millisecond)
 			}
 
 			select {
@@ -433,14 +405,11 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 	for reply := range replyChan {
 		rf.mu.Lock()
 
-		// 状态检查，避免后续无用功
-		if rf.state == follower {
+		if rf.state != candidate {
 			rf.mu.Unlock()
 			close(stopChan)
 			break
 		}
-
-		// 任期过期，回归到 follower 状态
 		if reply.Term > rf.currentTerm {
 			rf.votedFor = unVoted
 			rf.currentTerm = reply.Term
@@ -451,24 +420,21 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 			close(stopChan)
 			break
 		}
-
-		// 收到投票，计票
 		if reply.Term == rf.currentTerm && reply.VoteGranted {
 			voteCount++
-			if voteCount >= voteTarget {
-				rf.state = leader
-				latestIndex := len(rf.log)
-				rf.nextIndex = make([]int, len(rf.peers))
-				for i := 0; i < len(rf.peers); i++ {
-					rf.nextIndex[i] = latestIndex
-				}
-				rf.matchIndex = make([]int, len(rf.peers))
-				go rf.copyLogEntries()
+		}
 
-				rf.mu.Unlock()
-				close(stopChan)
-				break
+		if voteCount >= voteTarget {
+			rf.state = leader
+			for i := 0; i < len(rf.peers); i++ {
+				rf.nextIndex[i] = len(rf.log)
+				rf.matchIndex[i] = 0
 			}
+			go rf.copyLogEntries()
+
+			rf.mu.Unlock()
+			close(stopChan)
+			break
 		}
 
 		rf.mu.Unlock()
@@ -563,6 +529,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.votedFor = unVoted
 	rf.state = follower
 	rf.log = make([]LogEntry, 1)
+	rf.nextIndex = make([]int, len(rf.peers))
+	rf.matchIndex = make([]int, len(rf.peers))
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
