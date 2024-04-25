@@ -315,7 +315,7 @@ func (rf *Raft) copyLogEntries() {
 				}
 
 				if reply.Success && len(entries) > 0 {
-					lastIndex := max(rf.nextIndex[index], entries[len(entries)].Index)
+					lastIndex := max(rf.nextIndex[index], entries[len(entries)-1].Index)
 					rf.nextIndex[index] = lastIndex + 1
 					rf.matchIndex[index] = lastIndex
 				}
@@ -453,7 +453,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	}
 
 	rf.log = append(rf.log, LogEntry{Term: rf.currentTerm, Command: command, Index: len(rf.log)})
-	return len(rf.log), rf.currentTerm, rf.state == leader
+	return len(rf.log) - 1, rf.currentTerm, rf.state == leader
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
