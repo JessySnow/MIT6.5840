@@ -174,8 +174,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = false
 		return
 	} else if rf.currentTerm < args.Term {
-		rf.currentTerm = args.Term
 		rf.state = candidate
+		rf.currentTerm = args.Term
 		rf.votedFor = args.CandidateId
 		rf.selectionTicker = time.Now()
 		reply.Term = args.Term
@@ -193,6 +193,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if lastTerm > args.LastLogTerm || lastIndex > args.LastLogIndex {
 		reply.VoteGranted = false
 	} else {
+		rf.votedFor = args.CandidateId
 		reply.VoteGranted = true
 	}
 }
