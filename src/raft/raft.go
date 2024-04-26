@@ -193,7 +193,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if lastTerm > args.LastLogTerm || lastIndex > args.LastLogIndex {
 		reply.VoteGranted = false
 	} else {
+		rf.state = candidate
+		rf.currentTerm = args.Term
 		rf.votedFor = args.CandidateId
+		rf.selectionTicker = time.Now()
 		reply.VoteGranted = true
 	}
 }
