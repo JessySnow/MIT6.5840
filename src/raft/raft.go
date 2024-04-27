@@ -35,7 +35,6 @@ const (
 )
 
 const copyLogsInterval = 100 * time.Millisecond
-const applyMsgInterval = 100 * time.Millisecond
 const selectionTimeout = 400 * time.Millisecond
 const rpcTimeout = 20 * time.Millisecond
 const unVoted = -1
@@ -80,7 +79,8 @@ type Raft struct {
 	nextIndex  []int
 	matchIndex []int
 
-	applyCh chan ApplyMsg
+	applyMsgCond sync.Cond
+	applyCh      chan ApplyMsg
 }
 
 func (rf *Raft) GetState() (int, bool) {
@@ -203,7 +203,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
-	defer rf.mu.Unlock()
+	defer func() {
+		rf.mu.Unlock()
+		rf.applyMsgCond.Broadcast()
+	}()
 
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
@@ -220,7 +223,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.currentTerm = args.Term
 	}
 
-	// 0. 检查在相同索引 prevLogIndex 上日志的任期是否相同
+	// 0. 检查在相同索引 'prevLogIndex' 上日志的任期是否相同
 	prevLogIndex := args.PrevLogIndex
 	prevLogTerm := args.PrevLogTerm
 	if prevLogIndex >= len(rf.log) || rf.log[prevLogIndex].Term != prevLogTerm {
@@ -228,21 +231,23 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	// 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
-	argEntries := args.Entries
-	for i, entry := range argEntries {
+	// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
+	for i, entry := range args.Entries {
 		index := entry.Index
 		if index < len(rf.log) && rf.log[index].Term != entry.Term {
 			rf.log = rf.log[:index]
 			rf.log = append(rf.log, args.Entries[i:]...)
 			break
-		} else {
+		} else if index == len(rf.log) || rf.log[index].Term == entry.Term {
 			rf.log = append(rf.log, args.Entries[i:]...)
+			break
+		} else if index > len(rf.log) {
+			reply.Success = false
 			break
 		}
 	}
 
-	//  同步 leader 的日志的提交情况
+	//  2. 同步 leader 的日志的提交情况
 	if args.LeaderCommit > rf.commitIndex {
 		rf.commitIndex = min(len(rf.log)-1, args.LeaderCommit)
 	}
@@ -319,9 +324,8 @@ func (rf *Raft) copyLogEntries() {
 				}
 
 				if reply.Success && len(entries) > 0 {
-					lastIndex := max(rf.nextIndex[index], entries[len(entries)-1].Index)
-					rf.nextIndex[index] = lastIndex + 1
-					rf.matchIndex[index] = lastIndex
+					rf.nextIndex[index] = entries[len(entries)-1].Index + 1
+					rf.matchIndex[index] = entries[len(entries)-1].Index
 				}
 				if !reply.Success {
 					rf.nextIndex[index] = rf.nextIndex[index] - 1
@@ -427,12 +431,12 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 func (rf *Raft) applyCommand() {
 	for {
 		rf.mu.Lock()
+		rf.applyMsgCond.Wait()
 		for rf.lastApplied <= rf.commitIndex {
 			rf.applyCh <- ApplyMsg{Command: rf.log[rf.lastApplied].Command, CommandIndex: rf.lastApplied, CommandValid: true}
 			rf.lastApplied++
 		}
 		rf.mu.Unlock()
-		time.Sleep(applyMsgInterval)
 	}
 }
 
@@ -517,10 +521,13 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// Your initialization code here (3A, 3B, 3C).
 	rf.currentTerm = 0
+	rf.commitIndex = 0
+	rf.lastApplied = 0
 	rf.votedFor = unVoted
 	rf.state = follower
 	rf.log = make([]LogEntry, 1)
 	rf.applyCh = applyCh
+	rf.applyMsgCond = sync.Cond{L: &rf.mu}
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
 
