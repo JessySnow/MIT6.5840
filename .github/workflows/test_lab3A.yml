@@ -9,7 +9,7 @@ on:
 
 jobs:
   test3A:
-    name: setup env
+    name: test Lab3A
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
