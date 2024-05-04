@@ -231,20 +231,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	// 1. 检查在相同的索引上，是否存在任期不同的条目，存在冲突即删除冲突日志及之后的日志
-	for i, entry := range args.Entries {
-		index := entry.Index
-		if index < len(rf.log) && rf.log[index].Term != entry.Term {
-			rf.log = rf.log[:index]
-			rf.log = append(rf.log, args.Entries[i:]...)
-			break
-		} else if index == len(rf.log) || rf.log[index].Term == entry.Term {
-			rf.log = append(rf.log, args.Entries[i:]...)
-			break
-		} else if index > len(rf.log) {
-			reply.Success = false
-			break
-		}
+	// 1. 新增的日志直接覆盖
+	if len(args.Entries) != 0 {
+		rf.log = rf.log[:prevLogIndex+1]
+		rf.log = append(rf.log, args.Entries...)
 	}
 
 	//  2. 同步 leader 的日志的提交情况
@@ -456,7 +446,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if rf.state != leader {
+	if rf.killed() || rf.state != leader {
 		return -1, -1, false
 	}
 
