@@ -351,6 +351,7 @@ func (rf *Raft) updateCommitIndex() {
 
 			if incCount >= incTarget {
 				rf.commitIndex = N
+				rf.applyCh <- ApplyMsg{Command: rf.log[rf.commitIndex].Command, CommandIndex: rf.commitIndex, CommandValid: true}
 			} else {
 				break
 			}
