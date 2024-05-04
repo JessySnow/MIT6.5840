@@ -189,11 +189,18 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.currentTerm
 	lastTerm := rf.log[len(rf.log)-1].Term
 	lastIndex := rf.log[len(rf.log)-1].Index
-	if lastTerm > args.LastLogTerm || lastIndex > args.LastLogIndex {
+
+	if lastTerm < args.LastLogTerm {
+		rf.state = candidate
+		rf.votedFor = args.CandidateId
+		rf.selectionTicker = time.Now()
+		reply.VoteGranted = true
+	} else if lastTerm > args.LastLogTerm {
+		reply.VoteGranted = false
+	} else if lastIndex > args.LastLogIndex {
 		reply.VoteGranted = false
 	} else {
 		rf.state = candidate
-		rf.currentTerm = args.Term
 		rf.votedFor = args.CandidateId
 		rf.selectionTicker = time.Now()
 		reply.VoteGranted = true
@@ -336,21 +343,22 @@ func (rf *Raft) updateCommitIndex() {
 		}
 
 		incTarget := int(float64(len(rf.peers))/2.0 + 0.5)
-		for N := rf.commitIndex + 1; N < len(rf.log); N++ {
+		for N := len(rf.log) - 1; N > rf.commitIndex; N-- {
 			incCount := 1
-			for j, matchIndex := range rf.matchIndex {
-				if j == rf.me {
+			for i, match := range rf.matchIndex {
+				if i == rf.me {
 					continue
 				}
-				if matchIndex >= N && rf.log[N].Term == rf.currentTerm {
+				if match >= N && rf.log[N].Term == rf.currentTerm {
 					incCount++
 				}
 			}
 
 			if incCount >= incTarget {
+				for i := rf.commitIndex + 1; i <= N; i++ {
+					rf.applyCh <- ApplyMsg{Command: rf.log[i].Command, CommandIndex: i, CommandValid: true}
+				}
 				rf.commitIndex = N
-				rf.applyCh <- ApplyMsg{Command: rf.log[rf.commitIndex].Command, CommandIndex: rf.commitIndex, CommandValid: true}
-			} else {
 				break
 			}
 		}
