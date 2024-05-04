@@ -33,5 +33,5 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Test3A
+      - name: Test3B
         run: cd src/raft/ && go test -run 3B
