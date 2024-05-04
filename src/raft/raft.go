@@ -34,9 +34,10 @@ const (
 	leader
 )
 
+const rpcTimeout = 20 * time.Millisecond
 const copyLogsInterval = 100 * time.Millisecond
 const selectionTimeout = 400 * time.Millisecond
-const rpcTimeout = 20 * time.Millisecond
+const updateCommitIndexInterval = 100 * time.Millisecond
 const unVoted = -1
 
 // as each Raft peer becomes aware that successive log entries are
@@ -321,29 +322,42 @@ func (rf *Raft) copyLogEntries() {
 					rf.nextIndex[index] = rf.nextIndex[index] - 1
 				}
 
-				for i := rf.commitIndex + 1; i < len(rf.log); i++ {
-					inc := true
-					for j, matchIndex := range rf.matchIndex {
-						if j == rf.me {
-							continue
-						}
-						if matchIndex < i || rf.log[i].Term != rf.currentTerm {
-							inc = false
-							break
-						}
-					}
-
-					if inc {
-						rf.commitIndex = i
-					} else {
-						break
-					}
-				}
-
 				rf.mu.Unlock()
 				time.Sleep(copyLogsInterval)
 			}
 		}(i)
+	}
+}
+
+func (rf *Raft) updateCommitIndex() {
+	for {
+		rf.mu.Lock()
+		if rf.state != leader {
+			rf.mu.Unlock()
+			return
+		}
+
+		incTarget := int(float64(len(rf.peers))/2.0 + 0.5)
+		for N := rf.commitIndex + 1; N < len(rf.log); N++ {
+			incCount := 1
+			for j, matchIndex := range rf.matchIndex {
+				if j == rf.me {
+					continue
+				}
+				if matchIndex >= N && rf.log[N].Term == rf.currentTerm {
+					incCount++
+				}
+			}
+
+			if incCount >= incTarget {
+				rf.commitIndex = N
+			} else {
+				break
+			}
+		}
+
+		rf.mu.Unlock()
+		time.Sleep(updateCommitIndexInterval)
 	}
 }
 
@@ -408,6 +422,7 @@ func (rf *Raft) startElection(currentTerm, lastLogIndex, lastLogTerm int) {
 				rf.matchIndex[i] = 0
 			}
 			go rf.copyLogEntries()
+			go rf.updateCommitIndex()
 
 			rf.mu.Unlock()
 			close(stopChan)
