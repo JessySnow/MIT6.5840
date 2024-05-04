@@ -170,22 +170,20 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if rf.currentTerm > args.Term {
+	switch {
+	case rf.currentTerm == args.Term && rf.state != follower:
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		return
-	} else if rf.currentTerm < args.Term {
-		rf.state = candidate
+	case rf.currentTerm > args.Term:
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+		return
+	default:
+		rf.state = follower
+		rf.votedFor = unVoted
 		rf.currentTerm = args.Term
-		rf.votedFor = args.CandidateId
 		rf.selectionTicker = time.Now()
-		reply.Term = args.Term
-		reply.VoteGranted = true
-		return
-	} else if rf.state != follower {
-		reply.Term = rf.currentTerm
-		reply.VoteGranted = false
-		return
 	}
 
 	reply.Term = rf.currentTerm
