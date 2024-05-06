@@ -31,13 +31,13 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 
 	// 0. 加入调度
 	workerId, _ = joinCoordinator()
-	log.SetPrefix("[Worker#" + strconv.Itoa(workerId) + "]: ")
+	//log.SetPrefix("[Worker#" + strconv.Itoa(workerId) + "]: ")
 
 	// 1. Worker 保活，worker 进程控制
 	go func() {
 		for range time.Tick(pingGap) {
 			if !pingCoordinator(workerId) {
-				log.Fatal("disconnected from coordinator, worker exit!")
+				//log.Fatal("disconnected from coordinator, worker exit!")
 			}
 		}
 	}()
@@ -49,7 +49,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			// 提交任务
 			submitTask(*t)
 		} else {
-			log.Println(e)
+			//log.Println(e)
 		}
 	}
 }
