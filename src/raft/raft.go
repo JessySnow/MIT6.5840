@@ -7,10 +7,10 @@ package raft
 //
 // rf = Make(...)
 //   create a new Raft server.
-// rf.Start(command interface{}) (index, term, isleader)
+// rf.Start(command interface{}) (index, Term, isleader)
 //   start agreement on a new log entry
-// rf.GetState() (term, isLeader)
-//   ask a Raft for its current term, and whether it thinks it is leader
+// rf.GetState() (Term, isLeader)
+//   ask a Raft for its current Term, and whether it thinks it is leader
 // ApplyMsg
 //   each time a new entry is committed to the log, each Raft peer
 //   should send an ApplyMsg to the service (or tester)
@@ -56,6 +56,7 @@ const (
 	leader
 )
 const undefined = -1
+const copyLogsInterval = 150 * time.Millisecond
 
 // A Go object implementing a single Raft peer.
 type Raft struct {
@@ -100,19 +101,25 @@ func (rf *Raft) initLeader(term int) {
 func (rf *Raft) startElection(term int) {
 	rf.mu.Lock()
 	if rf.killed() || rf.currentTerm != term {
+		rf.mu.Unlock()
 		return
 	}
-	args := &RequestVoteArgs{term: rf.currentTerm, candidateId: rf.me}
+	args := &RequestVoteArgs{Term: rf.currentTerm, CandidateId: rf.me}
 	rf.mu.Unlock()
 
 	voteCount := 1
 	voteTarget := int(math.Round(float64(len(rf.peers))/2.0 + 0.5))
 	countLock := sync.Mutex{}
 	waitGroup := sync.WaitGroup{}
-	waitGroup.Add(len(rf.peers))
+	waitGroup.Add(voteTarget)
+
 	for i, _ := range rf.peers {
 		if i == rf.me {
-			waitGroup.Done()
+			countLock.Lock()
+			if voteCount <= voteTarget {
+				waitGroup.Done()
+			}
+			countLock.Unlock()
 			continue
 		}
 
@@ -123,11 +130,15 @@ func (rf *Raft) startElection(term int) {
 
 			countLock.Lock()
 			defer func() {
+				if voteCount <= voteTarget {
+					DPrintf("voteCount: %d, voteTarget: %d", voteCount, voteTarget)
+					waitGroup.Done()
+				}
 				countLock.Unlock()
-				waitGroup.Done()
 			}()
 
-			if reply.voteGranted {
+			if reply.VoteGranted {
+				DPrintf("server[%d] receive one ticket in term: %d from server[%d]", rf.me, term, index)
 				voteCount += 1
 			}
 		}(i)
@@ -137,13 +148,48 @@ func (rf *Raft) startElection(term int) {
 
 	rf.mu.Lock()
 	if rf.killed() || rf.currentTerm != term {
+		rf.mu.Unlock()
 		return
 	}
-	// TODO 开启心跳
+
 	if voteCount >= voteTarget {
+		DPrintf("server[%d] become leader", rf.me)
 		rf.initLeader(term)
+		go rf.startCopyLogs(term)
 	}
 	rf.mu.Unlock()
+}
+
+func (rf *Raft) startCopyLogs(term int) {
+	rf.mu.Lock()
+	if rf.killed() || rf.currentTerm != term {
+		rf.mu.Unlock()
+		return
+	}
+	rf.mu.Unlock()
+
+	for i, _ := range rf.peers {
+		if i == rf.me {
+			continue
+		}
+
+		go func(index int) {
+			for {
+				args := &AppendEntriesArgs{Term: term, LeaderId: rf.me}
+				reply := new(AppendEntriesReply)
+				for !rf.sendAppendEntries(index, args, reply) {
+				}
+				if reply.Term > term {
+					rf.mu.Lock()
+					rf.initFollower(reply.Term, time.Now())
+					rf.mu.Unlock()
+					return
+				}
+
+				time.Sleep(copyLogsInterval)
+			}
+		}(i)
+	}
 }
 
 // return currentTerm and whether this server
@@ -206,16 +252,26 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 // field names must start with capital letters!
 type RequestVoteArgs struct {
 	// Your data here (3A, 3B).
-	term        int
-	candidateId int
+	Term        int
+	CandidateId int
+}
+
+type AppendEntriesArgs struct {
+	Term     int
+	LeaderId int
 }
 
 // example RequestVote RPC reply structure.
 // field names must start with capital letters!
 type RequestVoteReply struct {
 	// Your data here (3A).
-	term        int
-	voteGranted bool
+	Term        int
+	VoteGranted bool
+}
+
+type AppendEntriesReply struct {
+	Term    int
+	Success bool
 }
 
 // example RequestVote RPC handler.
@@ -224,20 +280,41 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if rf.currentTerm > args.term {
-		reply.term = rf.currentTerm
-		reply.voteGranted = false
-	} else if rf.currentTerm < args.term {
-		rf.initCandidate(args.term, args.candidateId, time.Now())
-		reply.term = rf.currentTerm
-		reply.voteGranted = true
-	} else if rf.votedFor == undefined || rf.votedFor == args.candidateId {
-		rf.initCandidate(args.term, args.candidateId, time.Now())
-		reply.term = rf.currentTerm
-		reply.voteGranted = true
+	if rf.currentTerm > args.Term {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+	} else if rf.currentTerm < args.Term {
+		rf.initCandidate(args.Term, args.CandidateId, time.Now())
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = true
+	} else if rf.votedFor == undefined || rf.votedFor == args.CandidateId {
+		rf.initCandidate(args.Term, args.CandidateId, time.Now())
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = true
 	} else {
-		reply.term = rf.currentTerm
-		reply.voteGranted = false
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+	}
+}
+
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if rf.currentTerm > args.Term {
+		reply.Term = rf.currentTerm
+		reply.Success = false
+	} else if rf.currentTerm < args.Term {
+		rf.initFollower(args.Term, time.Now())
+		reply.Term = rf.currentTerm
+		reply.Success = true
+	} else {
+		if rf.state != follower {
+			rf.initFollower(args.Term, time.Now())
+		}
+		rf.heartbeatTime = time.Now()
+		reply.Term = rf.currentTerm
+		reply.Success = true
 	}
 }
 
@@ -269,8 +346,11 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 // that the caller passes the address of the reply struct with &, not
 // the struct itself.
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
-	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
-	return ok
+	return rf.peers[server].Call("Raft.RequestVote", args, reply)
+}
+
+func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
+	return rf.peers[server].Call("Raft.AppendEntries", args, reply)
 }
 
 // the service using Raft (e.g. a k/v server) wants to start
@@ -283,7 +363,7 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 //
 // the first return value is the index that the command will appear at
 // if it's ever committed. the second return value is the current
-// term. the third return value is true if this server believes it is
+// Term. the third return value is true if this server believes it is
 // the leader.
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	index := -1
@@ -319,7 +399,7 @@ func (rf *Raft) ticker() {
 		rf.mu.Lock()
 
 		now := time.Now()
-		if now.Sub(rf.heartbeatTime) > rf.selectionTimeout {
+		if rf.state != leader && now.Sub(rf.heartbeatTime) > rf.selectionTimeout {
 			rf.initCandidate(rf.currentTerm+1, rf.me, now)
 			go rf.startElection(rf.currentTerm)
 		}
